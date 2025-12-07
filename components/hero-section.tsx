@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 
 export function HeroSection() {
-  const [searchType, setSearchType] = useState<"alquiler" | "compra">("compra")
+  const [searchType, setSearchType] = useState<"compra" | "alquiler">("compra")
   const [location, setLocation] = useState("")
-  const [propertyType, setPropertyType] = useState("todos")
+  const [propertyType, setPropertyType] = useState("")
   const [minPrice, setMinPrice] = useState("")
   const [maxPrice, setMaxPrice] = useState("")
   const [bedrooms, setBedrooms] = useState("")
@@ -20,8 +20,8 @@ export function HeroSection() {
 
     params.append("operacion", searchType)
 
-    if (location) params.append("searchTerm", location)
-    if (propertyType !== "todos") params.append("tipo", propertyType)
+    if (location.trim()) params.append("searchTerm", location.trim())
+    if (propertyType) params.append("tipo", propertyType)
     if (minPrice) params.append("precioMin", minPrice)
     if (maxPrice) params.append("precioMax", maxPrice)
     if (bedrooms) params.append("habitaciones", bedrooms)
@@ -67,6 +67,7 @@ export function HeroSection() {
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex gap-2 border border-white/20 rounded-lg p-1 w-full bg-white/5">
                   <button
+                    type="button"
                     onClick={() => setSearchType("compra")}
                     className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded transition-all font-bold text-xs sm:text-sm ${
                       searchType === "compra"
@@ -77,6 +78,7 @@ export function HeroSection() {
                     Comprar
                   </button>
                   <button
+                    type="button"
                     onClick={() => setSearchType("alquiler")}
                     className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded transition-all font-bold text-xs sm:text-sm ${
                       searchType === "alquiler"
@@ -97,16 +99,16 @@ export function HeroSection() {
                       onChange={(e) => setLocation(e.target.value)}
                       placeholder="Ubicación o dirección"
                       className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border border-white/20 rounded-lg bg-white/10 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary transition-all text-sm sm:text-base"
+                      onKeyPress={(e) => e.key === "Enter" && handleSearch()}
                     />
                   </div>
 
-                  {/* Property Type Select */}
                   <select
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-white/20 rounded-lg bg-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer transition-all text-sm sm:text-base"
                     value={propertyType}
                     onChange={(e) => setPropertyType(e.target.value)}
                   >
-                    <option value="todos" className="bg-black">
+                    <option value="" className="bg-black">
                       Tipo de inmueble
                     </option>
                     <option value="casa" className="bg-black">
@@ -123,7 +125,6 @@ export function HeroSection() {
                     </option>
                   </select>
 
-                  {/* Price Range */}
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <input
                       type="number"
@@ -141,7 +142,6 @@ export function HeroSection() {
                     />
                   </div>
 
-                  {/* Bedrooms and Bathrooms */}
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <select
                       className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-white/20 rounded-lg bg-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer transition-all text-xs sm:text-sm"
@@ -185,7 +185,6 @@ export function HeroSection() {
                   </div>
                 </div>
 
-                {/* Search Button */}
                 <Button
                   onClick={handleSearch}
                   className="w-full py-2.5 sm:py-3 text-sm sm:text-base bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-bold transition-all"
