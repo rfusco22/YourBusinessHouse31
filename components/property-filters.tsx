@@ -4,7 +4,6 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Sliders } from "lucide-react"
-import { LocationAutocomplete } from "@/components/location-autocomplete"
 
 interface PropertyFiltersProps {
   filters: any
@@ -71,10 +70,12 @@ export function PropertyFilters({ filters, onFiltersChange, onApplyFilters }: Pr
             {/* Location Search */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Búsqueda</label>
-              <LocationAutocomplete
+              <input
+                type="text"
                 value={filters.searchTerm || ""}
-                onChange={(value) => handleFilterChange("searchTerm", value)}
+                onChange={(e) => handleFilterChange("searchTerm", e.target.value)}
                 placeholder="Ubicación o dirección"
+                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
               />
             </div>
 
