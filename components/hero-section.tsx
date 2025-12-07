@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Search, MapPin } from "lucide-react"
+import { Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
+import { LocationAutocomplete } from "@/components/location-autocomplete"
 
 export function HeroSection() {
   const [searchType, setSearchType] = useState<"compra" | "alquiler">("compra")
@@ -91,17 +92,7 @@ export function HeroSection() {
                 </div>
 
                 <div className="space-y-3 sm:space-y-4">
-                  <div className="relative">
-                    <MapPin className="absolute left-3 sm:left-4 top-3 sm:top-3.5 w-4 sm:w-5 h-4 sm:h-5 text-primary z-10 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Ubicación o dirección"
-                      className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border border-white/20 rounded-lg bg-white/10 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-primary transition-all text-sm sm:text-base"
-                      onKeyPress={(e) => e.key === "Enter" && handleSearch()}
-                    />
-                  </div>
+                  <LocationAutocomplete value={location} onChange={setLocation} placeholder="Ubicación o dirección" />
 
                   <select
                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-white/20 rounded-lg bg-white/10 text-white focus:outline-none focus:ring-2 focus:ring-primary appearance-none cursor-pointer transition-all text-sm sm:text-base"

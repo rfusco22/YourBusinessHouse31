@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, MapPin } from "lucide-react"
 import type { google } from "google-maps"
 
 interface Coordinates {
@@ -172,6 +172,7 @@ export function LocationAutocomplete({
   return (
     <div className="relative">
       <div className="relative">
+        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary z-10 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -180,7 +181,7 @@ export function LocationAutocomplete({
           onKeyDown={handleKeyDown}
           onFocus={() => value && suggestions.length > 0 && setIsOpen(true)}
           placeholder={placeholder}
-          className={`w-full px-4 py-2 bg-neutral-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none transition-colors pr-10 ${
+          className={`w-full pl-10 pr-10 py-2 bg-neutral-800 border rounded-lg text-white placeholder-gray-500 focus:outline-none transition-colors ${
             error ? "border-red-500 focus:border-red-500" : "border-primary/30 focus:border-primary"
           }`}
         />
