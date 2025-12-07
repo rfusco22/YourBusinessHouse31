@@ -155,10 +155,13 @@ export async function GET(request: Request) {
 
     if (operacion && operacion !== "todos") {
       if (operacion === "alquiler") {
+        // Mostrar propiedades de alquiler Y las que tienen ambas opciones
         sqlQuery += ` AND i.operation_type IN ('alquiler', 'ambos')`
       } else if (operacion === "compra") {
+        // Mostrar propiedades de compra Y las que tienen ambas opciones
         sqlQuery += ` AND i.operation_type IN ('compra', 'ambos')`
       } else if (operacion === "ambos") {
+        // Mostrar SOLO propiedades que tienen ambas opciones
         sqlQuery += ` AND i.operation_type = 'ambos'`
       }
     }
@@ -168,7 +171,9 @@ export async function GET(request: Request) {
         .split(",")
         .map((token) => token.trim())
         .filter((token) => {
+          // Ignorar tokens que son solo números (códigos postales)
           if (/^\d+$/.test(token)) return false
+          // Ignorar tokens muy cortos
           if (token.length < 2) return false
           return true
         })
