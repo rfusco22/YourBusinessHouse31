@@ -9,6 +9,8 @@ interface Property {
   id: number
   title: string
   location: string
+  city?: string
+  state?: string
   price: number
   image_url?: string
   bedrooms: number
@@ -34,16 +36,18 @@ export function PropertyGrid({ filters, currentPage, onPageChange, onPropertyCou
       try {
         setLoading(true)
         const queryParams = new URLSearchParams()
-        queryParams.append("status", "disponible") // Only fetch available properties
+        queryParams.append("status", "disponible")
 
         if (filters.searchTerm) queryParams.append("searchTerm", filters.searchTerm)
+        if (filters.city) queryParams.append("city", filters.city)
+        if (filters.state) queryParams.append("state", filters.state)
         if (filters.type && filters.type !== "todos") queryParams.append("type", filters.type)
         if (filters.priceMin) queryParams.append("priceMin", filters.priceMin)
         if (filters.priceMax) queryParams.append("priceMax", filters.priceMax)
         if (filters.bedrooms) queryParams.append("bedrooms", filters.bedrooms)
         if (filters.bathrooms) queryParams.append("bathrooms", filters.bathrooms)
         if (filters.area) queryParams.append("area", filters.area)
-        if (filters.operacion) queryParams.append("operacion", filters.operacion) // Added operation type filter
+        if (filters.operacion) queryParams.append("operacion", filters.operacion)
 
         const response = await fetch(`/api/properties?${queryParams.toString()}`)
         if (!response.ok) throw new Error("Failed to fetch properties")

@@ -32,14 +32,14 @@ export default function PropertiesPage() {
     bedrooms: "",
     bathrooms: "",
     area: "",
-    operacion: "", // Added operation filter for compra/alquiler
+    operacion: "",
   })
   const [propertyCount, setPropertyCount] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     const operacion = searchParams.get("operacion") || ""
-    const ubicacion = searchParams.get("ubicacion") || ""
+    const searchTerm = searchParams.get("searchTerm") || searchParams.get("ubicacion") || ""
     const tipo = searchParams.get("tipo") || "todos"
     const precioMin = searchParams.get("precioMin") || ""
     const precioMax = searchParams.get("precioMax") || ""
@@ -47,14 +47,14 @@ export default function PropertiesPage() {
     const banos = searchParams.get("banos") || ""
 
     setFilters({
-      searchTerm: ubicacion,
+      searchTerm,
       type: tipo,
       priceMin: precioMin,
       priceMax: precioMax,
       bedrooms: habitaciones,
       bathrooms: banos,
       area: "",
-      operacion: operacion,
+      operacion,
     })
   }, [searchParams])
 

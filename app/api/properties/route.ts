@@ -8,6 +8,8 @@ export async function GET(request: Request) {
     const propertyId = searchParams.get("propertyId")
 
     const searchTerm = searchParams.get("searchTerm") || ""
+    const city = searchParams.get("city") || ""
+    const state = searchParams.get("state") || ""
     const type = searchParams.get("type") || ""
     const priceMin = searchParams.get("priceMin") ? Number.parseFloat(searchParams.get("priceMin")!) : null
     const priceMax = searchParams.get("priceMax") ? Number.parseFloat(searchParams.get("priceMax")!) : null
@@ -69,6 +71,8 @@ export async function GET(request: Request) {
           operation_type: property.operation_type || "compra",
           latitude: property.latitude,
           longitude: property.longitude,
+          city: property.city || null,
+          state: property.state || null,
           images: imagesResult.map((img: any) => ({
             id: img.id,
             url: img.image_url,
@@ -113,6 +117,8 @@ export async function GET(request: Request) {
             id: p.id,
             title: p.title,
             location: p.location,
+            city: p.city || null,
+            state: p.state || null,
             price: p.price,
             rental_price: p.rental_price || null,
             purchase_price: p.purchase_price || null,
@@ -157,9 +163,45 @@ export async function GET(request: Request) {
       }
     }
 
+    if (city) {
+      sqlQuery += ` AND i.city LIKE ?`
+      params.push(`%${city}%`)
+    }
+
+    if (state) {
+      sqlQuery += ` AND i.state = ?`
+      params.push(state)
+    }
+
     if (searchTerm) {
-      sqlQuery += ` AND (i.title LIKE ? OR i.location LIKE ?)`
-      params.push(`%${searchTerm}%`, `%${searchTerm}%`)
+      // Dividir el término de búsqueda por comas y limpiar
+      const tokens = searchTerm
+        .split(",")
+        .map((token) => token.trim())
+        .filter((token) => {
+          // Ignorar tokens que son solo números (códigos postales)
+          if (/^\d+$/.test(token)) return false
+          // Ignorar tokens muy cortos
+          if (token.length < 2) return false
+          return true
+        })
+
+      if (tokens.length > 0) {
+        // Crear una búsqueda OR para cada token
+        const searchConditions = tokens
+          .map(() => "(i.title LIKE ? OR i.location LIKE ? OR i.city LIKE ? OR i.state LIKE ?)")
+          .join(" OR ")
+
+        sqlQuery += ` AND (${searchConditions})`
+
+        // Agregar parámetros para cada token
+        tokens.forEach((token) => {
+          const searchPattern = `%${token}%`
+          params.push(searchPattern, searchPattern, searchPattern, searchPattern)
+        })
+
+        console.log("[v0] Search tokens:", tokens)
+      }
     }
 
     if (type && type !== "todos") {
@@ -196,6 +238,8 @@ export async function GET(request: Request) {
 
     console.log("[v0] Fetching properties with filters:", {
       searchTerm,
+      city,
+      state,
       type,
       priceMin,
       priceMax,
@@ -219,6 +263,8 @@ export async function GET(request: Request) {
           id: p.id,
           title: p.title,
           location: p.location,
+          city: p.city || null,
+          state: p.state || null,
           price: p.price,
           rental_price: p.rental_price || null,
           purchase_price: p.purchase_price || null,
@@ -259,6 +305,8 @@ export async function PUT(request: Request) {
       type,
       price,
       location,
+      city,
+      state,
       bedrooms,
       bathrooms,
       parking,
@@ -269,7 +317,7 @@ export async function PUT(request: Request) {
       longitude,
       rental_price,
       purchase_price,
-      image_urls, // Add image_urls parameter
+      image_urls,
     } = await request.json()
 
     if (!propertyId) {
@@ -278,7 +326,7 @@ export async function PUT(request: Request) {
 
     console.log("[v0] Updating property:", propertyId)
     console.log("[v0] Pricing info:", { price, rental_price, purchase_price, operation_type })
-    console.log("[v0] Image URLs:", image_urls?.length || 0) // Log image count
+    console.log("[v0] Image URLs:", image_urls?.length || 0)
 
     const parkingValue =
       parking !== undefined && parking !== null && parking !== "" ? Number.parseInt(String(parking)) : 0
@@ -309,8 +357,8 @@ export async function PUT(request: Request) {
 
     const updateQuery =
       latitude !== null && longitude !== null
-        ? `UPDATE inmueble SET title = ?, description = ?, type = ?, price = ?, location = ?, bedrooms = ?, bathrooms = ?, parking = ?, area = ?, operation_type = ?, latitude = ?, longitude = ?, rental_price = ?, purchase_price = ? WHERE id = ?`
-        : `UPDATE inmueble SET title = ?, description = ?, type = ?, price = ?, location = ?, bedrooms = ?, bathrooms = ?, parking = ?, area = ?, operation_type = ?, rental_price = ?, purchase_price = ? WHERE id = ?`
+        ? `UPDATE inmueble SET title = ?, description = ?, type = ?, price = ?, location = ?, city = ?, state = ?, bedrooms = ?, bathrooms = ?, parking = ?, area = ?, operation_type = ?, latitude = ?, longitude = ?, rental_price = ?, purchase_price = ? WHERE id = ?`
+        : `UPDATE inmueble SET title = ?, description = ?, type = ?, price = ?, location = ?, city = ?, state = ?, bedrooms = ?, bathrooms = ?, parking = ?, area = ?, operation_type = ?, rental_price = ?, purchase_price = ? WHERE id = ?`
 
     const updateParams =
       latitude !== null && longitude !== null
@@ -320,6 +368,8 @@ export async function PUT(request: Request) {
             type,
             priceValue,
             location,
+            city || null,
+            state || null,
             bedroomsValue,
             bathroomsValue,
             parkingValue,
@@ -337,6 +387,8 @@ export async function PUT(request: Request) {
             type,
             priceValue,
             location,
+            city || null,
+            state || null,
             bedroomsValue,
             bathroomsValue,
             parkingValue,
@@ -350,10 +402,8 @@ export async function PUT(request: Request) {
     await query(updateQuery, updateParams)
 
     if (image_urls && Array.isArray(image_urls) && image_urls.length > 0) {
-      // Delete existing images first
       await query(`DELETE FROM inmueble_images WHERE inmueble_id = ?`, [propertyId])
 
-      // Add new images
       for (let i = 0; i < image_urls.length; i++) {
         await query(`INSERT INTO inmueble_images (inmueble_id, image_url, display_order) VALUES (?, ?, ?)`, [
           propertyId,
