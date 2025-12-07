@@ -129,7 +129,6 @@ export async function GET(request: Request) {
             description: p.description,
             image_url: imagesResult.length > 0 ? imagesResult[0].image_url : p.image_url || null,
             type: p.type,
-            status: p.status || "disponible",
             operation_type: p.operation_type || "compra",
             latitude: p.latitude || null,
             longitude: p.longitude || null,
@@ -155,11 +154,36 @@ export async function GET(request: Request) {
     }
 
     if (operacion && operacion !== "todos") {
-      if (operacion === "ambos") {
-        sqlQuery += ` AND i.operation_type IN ('compra', 'alquiler')`
-      } else {
-        sqlQuery += ` AND i.operation_type = ?`
-        params.push(operacion)
+      if (operacion === "alquiler") {
+        sqlQuery += ` AND i.operation_type IN ('alquiler', 'ambos')`
+      } else if (operacion === "compra") {
+        sqlQuery += ` AND i.operation_type IN ('compra', 'ambos')`
+      } else if (operacion === "ambos") {
+        sqlQuery += ` AND i.operation_type = 'ambos'`
+      }
+    }
+
+    if (searchTerm) {
+      const tokens = searchTerm
+        .split(",")
+        .map((token) => token.trim())
+        .filter((token) => {
+          if (/^\d+$/.test(token)) return false
+          if (token.length < 2) return false
+          return true
+        })
+
+      if (tokens.length > 0) {
+        const searchConditions = tokens
+          .map(() => "(i.title LIKE ? OR i.location LIKE ? OR i.city LIKE ? OR i.state LIKE ?)")
+          .join(" AND ")
+
+        sqlQuery += ` AND (${searchConditions})`
+
+        tokens.forEach((token) => {
+          const searchPattern = `%${token}%`
+          params.push(searchPattern, searchPattern, searchPattern, searchPattern)
+        })
       }
     }
 
@@ -173,50 +197,51 @@ export async function GET(request: Request) {
       params.push(state)
     }
 
-    if (searchTerm) {
-      // Dividir el término de búsqueda por comas y limpiar
-      const tokens = searchTerm
-        .split(",")
-        .map((token) => token.trim())
-        .filter((token) => {
-          // Ignorar tokens que son solo números (códigos postales)
-          if (/^\d+$/.test(token)) return false
-          // Ignorar tokens muy cortos
-          if (token.length < 2) return false
-          return true
-        })
-
-      if (tokens.length > 0) {
-        // Crear una búsqueda OR para cada token
-        const searchConditions = tokens
-          .map(() => "(i.title LIKE ? OR i.location LIKE ? OR i.city LIKE ? OR i.state LIKE ?)")
-          .join(" OR ")
-
-        sqlQuery += ` AND (${searchConditions})`
-
-        // Agregar parámetros para cada token
-        tokens.forEach((token) => {
-          const searchPattern = `%${token}%`
-          params.push(searchPattern, searchPattern, searchPattern, searchPattern)
-        })
-
-        console.log("[v0] Search tokens:", tokens)
-      }
-    }
-
     if (type && type !== "todos") {
       sqlQuery += ` AND i.type = ?`
       params.push(type)
     }
 
-    if (priceMin !== null) {
-      sqlQuery += ` AND i.price >= ?`
-      params.push(priceMin)
-    }
-
-    if (priceMax !== null) {
-      sqlQuery += ` AND i.price <= ?`
-      params.push(priceMax)
+    if (priceMin !== null || priceMax !== null) {
+      if (operacion === "alquiler") {
+        if (priceMin !== null) {
+          sqlQuery += ` AND i.rental_price >= ?`
+          params.push(priceMin)
+        }
+        if (priceMax !== null) {
+          sqlQuery += ` AND i.rental_price <= ?`
+          params.push(priceMax)
+        }
+      } else if (operacion === "compra") {
+        if (priceMin !== null) {
+          sqlQuery += ` AND i.purchase_price >= ?`
+          params.push(priceMin)
+        }
+        if (priceMax !== null) {
+          sqlQuery += ` AND i.purchase_price <= ?`
+          params.push(priceMax)
+        }
+      } else if (operacion === "ambos") {
+        if (priceMin !== null && priceMax !== null) {
+          sqlQuery += ` AND ((i.rental_price >= ? AND i.rental_price <= ?) OR (i.purchase_price >= ? AND i.purchase_price <= ?))`
+          params.push(priceMin, priceMax, priceMin, priceMax)
+        } else if (priceMin !== null) {
+          sqlQuery += ` AND (i.rental_price >= ? OR i.purchase_price >= ?)`
+          params.push(priceMin, priceMin)
+        } else if (priceMax !== null) {
+          sqlQuery += ` AND (i.rental_price <= ? OR i.purchase_price <= ?)`
+          params.push(priceMax, priceMax)
+        }
+      } else {
+        if (priceMin !== null) {
+          sqlQuery += ` AND i.price >= ?`
+          params.push(priceMin)
+        }
+        if (priceMax !== null) {
+          sqlQuery += ` AND i.price <= ?`
+          params.push(priceMax)
+        }
+      }
     }
 
     if (bedrooms !== null) {
@@ -250,7 +275,24 @@ export async function GET(request: Request) {
       operacion,
     })
 
+    console.log("[v0] SQL Query:", sqlQuery)
+    console.log("[v0] SQL Params:", params)
+
     const allProperties = (await query(sqlQuery, params)) as any[]
+
+    console.log("[v0] Raw query results count:", allProperties.length)
+    if (allProperties.length > 0) {
+      console.log(
+        "[v0] Sample property operation_types:",
+        allProperties.slice(0, 3).map((p) => ({
+          id: p.id,
+          title: p.title,
+          operation_type: p.operation_type,
+          rental_price: p.rental_price,
+          purchase_price: p.purchase_price,
+        })),
+      )
+    }
 
     const mappedProperties = await Promise.all(
       allProperties.map(async (p: any) => {

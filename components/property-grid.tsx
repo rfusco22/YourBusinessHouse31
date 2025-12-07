@@ -12,10 +12,13 @@ interface Property {
   city?: string
   state?: string
   price: number
+  rental_price?: number
+  purchase_price?: number
   image_url?: string
   bedrooms: number
   bathrooms: number
   area: number
+  operation_type?: string
 }
 
 const PROPERTIES_PER_PAGE = 8
@@ -49,15 +52,36 @@ export function PropertyGrid({ filters, currentPage, onPageChange, onPropertyCou
         if (filters.area) queryParams.append("area", filters.area)
         if (filters.operacion) queryParams.append("operacion", filters.operacion)
 
+        console.log("============ FILTRADO DEBUG ============")
+        console.log("Filtros enviados:", filters)
+        console.log("Operación seleccionada:", filters.operacion)
+        console.log("URL completa:", `/api/properties?${queryParams.toString()}`)
+        console.log("=======================================")
+
         const response = await fetch(`/api/properties?${queryParams.toString()}`)
         if (!response.ok) throw new Error("Failed to fetch properties")
 
         const result = await response.json()
+
+        console.log("============ RESULTADOS DEBUG ============")
+        console.log("Total propiedades recibidas:", result.data?.length || 0)
+        console.log(
+          "Propiedades:",
+          result.data?.map((p: Property) => ({
+            id: p.id,
+            title: p.title,
+            operation_type: p.operation_type,
+            rental_price: p.rental_price,
+            purchase_price: p.purchase_price,
+          })),
+        )
+        console.log("=======================================")
+
         setProperties(result.data || [])
         onPropertyCountChange(result.data?.length || 0)
         onPageChange(1)
       } catch (error) {
-        console.error("[v0] Error fetching properties:", error)
+        console.error("Error fetching properties:", error)
         setProperties([])
         onPropertyCountChange(0)
       } finally {

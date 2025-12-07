@@ -87,7 +87,7 @@ export function PropertyFilters({ filters, onFiltersChange, onApplyFilters }: Pr
               >
                 <option value="">Todos</option>
                 <option value="alquiler">Para Alquilar</option>
-                <option value="venta">Para Comprar</option>
+                <option value="compra">Para Comprar</option>
                 <option value="ambos">Para Alquilar y Para Comprar</option>
               </select>
             </div>

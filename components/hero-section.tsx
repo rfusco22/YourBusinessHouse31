@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 
 export function HeroSection() {
-  const [searchType, setSearchType] = useState<"alquiler" | "venta">("venta")
+  const [searchType, setSearchType] = useState<"alquiler" | "compra">("compra")
   const [location, setLocation] = useState("")
   const [propertyType, setPropertyType] = useState("todos")
   const [minPrice, setMinPrice] = useState("")
@@ -67,9 +67,9 @@ export function HeroSection() {
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex gap-2 border border-white/20 rounded-lg p-1 w-full bg-white/5">
                   <button
-                    onClick={() => setSearchType("venta")}
+                    onClick={() => setSearchType("compra")}
                     className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded transition-all font-bold text-xs sm:text-sm ${
-                      searchType === "venta"
+                      searchType === "compra"
                         ? "bg-primary text-primary-foreground shadow-lg"
                         : "text-white/60 hover:text-white/80"
                     }`}
