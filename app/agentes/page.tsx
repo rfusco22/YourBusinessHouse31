@@ -44,8 +44,7 @@ export default function AgentsPage() {
       <main className="flex-1">
         <AgentsHero />
 
-        {/* Agents Grid */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
           {loading ? (
             <div className="text-center text-muted-foreground">
               <p>Cargando agentes...</p>
@@ -55,7 +54,7 @@ export default function AgentsPage() {
               <p>No hay agentes disponibles</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {agents.map((agent) => (
                 <AgentCard key={agent.id} agent={agent} />
               ))}

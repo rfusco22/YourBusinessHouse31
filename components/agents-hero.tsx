@@ -3,21 +3,18 @@
 export function AgentsHero() {
   return (
     <div className="relative w-full h-screen min-h-[600px] max-h-[800px] overflow-hidden">
-      {/* Background image with high quality */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url(/agents-hero-patio.png)",
-          backgroundAttachment: "fixed",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          imageRendering: "crisp-edges",
-          WebkitBackfaceVisibility: "hidden",
-        }}
-      />
-
-      {/* Dark gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/40"></div>
+      {/* Background video with high quality */}
+      <div className="absolute inset-0 z-0">
+        <video autoPlay muted loop playsInline className="w-full h-full object-cover">
+          <source src="/heroagente.mp4" type="video/mp4" />
+          <img
+            src="/agents-hero-patio.png"
+            alt="Fondo de agentes inmobiliarios"
+            className="w-full h-full object-cover"
+          />
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/40" />
+      </div>
 
       {/* Bottom light gradient for smooth transition */}
       <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white to-transparent opacity-10"></div>

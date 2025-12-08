@@ -16,16 +16,15 @@ export default function BlogPage() {
       <main className="flex-1">
         <BlogHero />
 
-        {/* Blog Posts Section */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16" id="blog-posts">
-          <div className="mb-12">
-            <h2 className="text-4xl font-bold text-foreground mb-4">Artículos Recientes</h2>
-            <p className="text-lg text-muted-foreground">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16" id="blog-posts">
+          <div className="mb-8 sm:mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3 sm:mb-4">Artículos Recientes</h2>
+            <p className="text-base sm:text-lg text-muted-foreground">
               Conoce las tendencias y estrategias más recientes en el mercado inmobiliario
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
             {BLOG_POSTS.map((post, index) => (
               <Card
                 key={post.id}
@@ -36,7 +35,7 @@ export default function BlogPage() {
               >
                 {/* Image */}
                 <Link href={`/blog/${post.slug}`} className="block">
-                  <div className="h-56 bg-muted overflow-hidden relative">
+                  <div className="h-48 sm:h-56 bg-muted overflow-hidden relative">
                     <img
                       src={post.image || "/placeholder.svg"}
                       alt={post.title}
@@ -47,25 +46,27 @@ export default function BlogPage() {
                 </Link>
 
                 {/* Content */}
-                <div className="p-6 flex-1 flex flex-col">
-                  <div className="mb-4">
-                    <span className="inline-block bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-medium">
+                <div className="p-5 sm:p-6 flex-1 flex flex-col">
+                  <div className="mb-3 sm:mb-4">
+                    <span className="inline-block bg-primary text-primary-foreground px-2.5 sm:px-3 py-1 rounded-full text-xs font-medium">
                       {post.category}
                     </span>
                   </div>
 
                   <Link href={`/blog/${post.slug}`}>
-                    <h3 className="text-xl font-bold text-foreground mb-3 line-clamp-2 group-hover:text-primary transition-colors cursor-pointer">
+                    <h3 className="text-lg sm:text-xl font-bold text-foreground mb-2 sm:mb-3 line-clamp-2 group-hover:text-primary transition-colors cursor-pointer">
                       {post.title}
                     </h3>
                   </Link>
-                  <p className="text-muted-foreground mb-6 flex-1 line-clamp-3">{post.excerpt}</p>
+                  <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 flex-1 line-clamp-3">
+                    {post.excerpt}
+                  </p>
 
                   {/* Read More */}
                   <Link href={`/blog/${post.slug}`} className="w-full mt-auto">
                     <Button
                       variant="outline"
-                      className="w-full gap-2 bg-transparent group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all duration-300"
+                      className="w-full gap-2 text-sm sm:text-base bg-transparent group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all duration-300"
                     >
                       Leer más
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -77,20 +78,21 @@ export default function BlogPage() {
           </div>
         </div>
 
-        {/* CTA Section */}
-        <div className="bg-gradient-to-r from-primary/10 to-secondary/10 py-16 px-4 sm:px-6 lg:px-8 mt-16">
+        <div className="bg-gradient-to-r from-primary/10 to-secondary/10 py-12 sm:py-16 px-4 sm:px-6 lg:px-8 mt-12 sm:mt-16">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl lg:text-4xl font-bold text-foreground mb-4">Suscríbete a Nuestro Newsletter</h2>
-            <p className="text-lg text-muted-foreground mb-8">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground mb-3 sm:mb-4">
+              Suscríbete a Nuestro Newsletter
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground mb-6 sm:mb-8">
               Recibe las últimas actualizaciones y consejos inmobiliarios directamente en tu correo
             </p>
-            <div className="flex gap-3 max-w-md mx-auto">
+            <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input
                 type="email"
                 placeholder="tu@email.com"
-                className="flex-1 px-4 py-3 rounded-lg border-2 border-border bg-background focus:outline-none focus:border-primary transition-colors"
+                className="flex-1 px-4 py-2.5 sm:py-3 rounded-lg border-2 border-border bg-background focus:outline-none focus:border-primary transition-colors text-sm sm:text-base"
               />
-              <Button className="px-8">Suscribirse</Button>
+              <Button className="px-6 sm:px-8 text-sm sm:text-base">Suscribirse</Button>
             </div>
           </div>
         </div>

@@ -3,17 +3,18 @@
 export function PropertiesHero() {
   return (
     <div className="relative w-full h-screen min-h-[600px] max-h-[800px] overflow-hidden">
-      {/* Background image with high quality */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: "url(/luxury-property-hero.png)",
-          backgroundAttachment: "fixed",
-        }}
-      />
-
-      {/* Dark gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-transparent"></div>
+      {/* Background video with high quality */}
+      <div className="absolute inset-0 z-0">
+        <video autoPlay muted loop playsInline className="w-full h-full object-cover">
+          <source src="/heroinmueble.mp4" type="video/mp4" />
+          <img
+            src="/luxury-property-hero.png"
+            alt="Fondo de propiedades de lujo"
+            className="w-full h-full object-cover"
+          />
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-transparent" />
+      </div>
 
       {/* Bottom light gradient for smooth transition */}
       <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white to-transparent opacity-10"></div>

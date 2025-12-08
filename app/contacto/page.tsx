@@ -121,51 +121,44 @@ export default function ContactPage() {
       <Header />
       <main className="flex-1">
         <div className="relative w-full h-screen min-h-[600px] max-h-[800px] overflow-hidden">
-          <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{
-              backgroundImage: "url(/images/contact-hero.png)",
-              backgroundAttachment: "fixed",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-            }}
-          />
-
-          {/* Dark gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/40"></div>
+          <div className="absolute inset-0 z-0">
+            <video autoPlay muted loop playsInline className="w-full h-full object-cover">
+              <source src="/herocontacto.mp4" type="video/mp4" />
+              <img src="/images/contact-hero.png" alt="Fondo de contacto" className="w-full h-full object-cover" />
+            </video>
+            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/40" />
+          </div>
 
           {/* Bottom light gradient for smooth transition */}
           <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white to-transparent opacity-10"></div>
 
           {/* Content container */}
-          <div className="relative h-full flex items-center justify-start">
+          <div className="relative h-full flex items-center justify-start z-10">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-              <div className="max-w-2xl space-y-6">
+              <div className="max-w-2xl space-y-4 sm:space-y-6">
                 {/* Accent badge */}
                 <div className="inline-block">
-                  <span className="text-sm font-semibold text-white/80 uppercase tracking-widest bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
+                  <span className="text-xs sm:text-sm font-semibold text-white/80 uppercase tracking-widest bg-white/10 backdrop-blur-md px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20">
                     Estamos Aquí Para Ti
                   </span>
                 </div>
 
-                {/* Main heading */}
-                <h1 className="text-6xl md:text-7xl lg:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
                   Conecta con
                   <br />
                   nosotros
                 </h1>
 
-                {/* Subheading */}
-                <p className="text-lg md:text-xl text-white/90 max-w-xl font-light leading-relaxed drop-shadow">
+                <p className="text-base sm:text-lg md:text-xl text-white/90 max-w-xl font-light leading-relaxed drop-shadow">
                   Tu próximo hogar está a un mensaje de distancia. Nuestro equipo experto está listo para hacer realidad
                   tus sueños inmobiliarios.
                 </p>
 
                 {/* CTA Button */}
-                <div className="pt-4">
+                <div className="pt-2 sm:pt-4">
                   <a
                     href="#contact-form"
-                    className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
+                    className="inline-block bg-primary hover:bg-primary/90 text-white text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
                   >
                     Enviar Mensaje
                   </a>
@@ -175,12 +168,12 @@ export default function ContactPage() {
           </div>
 
           {/* Decorative corner accent */}
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-gradient-to-tl from-primary/20 to-transparent blur-3xl pointer-events-none"></div>
+          <div className="absolute bottom-0 right-0 w-64 sm:w-96 h-64 sm:h-96 bg-gradient-to-tl from-primary/20 to-transparent blur-3xl pointer-events-none"></div>
         </div>
 
         {/* Main Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
             {/* Contact Information Cards */}
             <motion.div
               variants={containerVariants}
