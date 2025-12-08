@@ -157,7 +157,7 @@ ESTILO:
 - NO menciones la herramienta ni el proceso técnico al usuario`
 
     const result = streamText({
-      model: "gpt-3.5-turbo",
+      model: "openai/gpt-4o-mini",
       system: systemMessage,
       messages: convertToModelMessages(messages),
       tools,
@@ -168,7 +168,7 @@ ESTILO:
 
     return result.toUIMessageStreamResponse()
   } catch (error) {
-    console.error("Error en chat API:", error)
+    console.error("[v0] Error en chat API:", error)
 
     return new Response(
       JSON.stringify({
