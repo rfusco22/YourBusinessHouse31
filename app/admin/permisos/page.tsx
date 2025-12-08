@@ -165,7 +165,7 @@ export default function AdminPermisos() {
           variant: "default",
         })
         closeDialog()
-        loadPermissions()
+        await loadPermissions() // Automatically refresh the list after approval
       } else {
         throw new Error(data.error)
       }
@@ -215,7 +215,7 @@ export default function AdminPermisos() {
           variant: "default",
         })
         closeDialog()
-        loadPermissions()
+        await loadPermissions() // Automatically refresh the list after rejection
       } else {
         throw new Error(data.error)
       }
