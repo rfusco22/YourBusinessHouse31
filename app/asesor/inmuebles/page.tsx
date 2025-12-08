@@ -673,30 +673,37 @@ export default function InmueblesAsesor() {
                         activeTab === "vendido" ||
                         property.owner_id === user?.id) && (
                         <>
-                          <Button
-                            onClick={() => handleEditProperty(property)}
-                            className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 gap-2"
-                          >
-                            <Edit2 size={16} />
-                            Editar
-                          </Button>
+                          {property.status !== "deshabilitado" && (
+                            <Button
+                              onClick={() => handleEditProperty(property)}
+                              className="flex-1 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 gap-2"
+                            >
+                              <Edit2 size={16} />
+                              Editar
+                            </Button>
+                          )}
                           <Button
                             onClick={() => handleTogglePropertyStatus(property)}
+                            disabled={pendingRequests.includes(property.id)}
                             className={`flex-1 ${
-                              property.status === "deshabilitado"
-                                ? "bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30"
-                                : "bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30"
+                              pendingRequests.includes(property.id)
+                                ? "bg-gray-600/20 text-gray-400 border border-gray-500/30 cursor-not-allowed"
+                                : property.status === "deshabilitado"
+                                  ? "bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-500/30"
+                                  : "bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30"
                             } gap-2`}
                           >
-                            {property.status === "deshabilitado" ? (
+                            {pendingRequests.includes(property.id) ? (
+                              <>Solicitud Pendiente</>
+                            ) : property.status === "deshabilitado" ? (
                               <>
                                 <Power size={16} />
-                                Habilitar
+                                Solicitar Habilitación
                               </>
                             ) : (
                               <>
                                 <PowerOff size={16} />
-                                Deshabilitar
+                                Solicitar Deshabilitación
                               </>
                             )}
                           </Button>
