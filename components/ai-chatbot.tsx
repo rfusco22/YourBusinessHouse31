@@ -4,9 +4,6 @@ import type React from "react"
 import { Button } from "@/components/ui/button"
 import { X, MessageCircle, Send, Loader2 } from "lucide-react"
 import Image from "next/image"
-import { useChat } from "@ai-sdk/react"
-import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai"
-import type { ChatMessage } from "@/app/api/chat/route"
 
 function WhatsAppIcon() {
   return (
@@ -23,28 +20,28 @@ function WhatsAppIcon() {
   )
 }
 
+interface Message {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  toolInvocations?: any[]
+}
+
 export function AIChatbot() {
   const [isOpen, setIsOpen] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content:
+        "¡Hola! 👋 Soy Hogarcito, tu agente inmobiliario virtual. Estoy aquí para ayudarte a encontrar tu próximo hogar en cualquier parte de Venezuela. ¿Estás buscando comprar o alquilar?",
+    },
+  ])
   const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [properties, setProperties] = useState<any[]>([])
   const [hasShownQuickReplies, setHasShownQuickReplies] = useState(false)
-
-  const { messages, sendMessage, status } = useChat<ChatMessage>({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-    initialMessages: [
-      {
-        id: "welcome",
-        role: "assistant",
-        parts: [
-          {
-            type: "text",
-            text: "¡Hola! 👋 Soy Hogarcito, tu agente inmobiliario virtual. Estoy aquí para ayudarte a encontrar tu próximo hogar en cualquier parte de Venezuela. ¿Estás buscando comprar o alquilar?",
-          },
-        ],
-      },
-    ],
-  })
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -54,13 +51,114 @@ export function AIChatbot() {
     scrollToBottom()
   }, [messages])
 
+  const sendMessage = async (userMessage: string) => {
+    if (!userMessage.trim()) return
+
+    const newUserMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: userMessage,
+    }
+
+    setMessages((prev) => [...prev, newUserMessage])
+    setInput("")
+    setIsLoading(true)
+    setHasShownQuickReplies(true)
+
+    setProperties([])
+
+    try {
+      console.log("[v0] Sending message to API:", userMessage)
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, newUserMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      })
+
+      console.log("[v0] Response status:", response.status)
+
+      if (!response.ok) {
+        throw new Error(`Error del servidor (${response.status})`)
+      }
+
+      if (!response.body) {
+        throw new Error("No se recibió respuesta del servidor")
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let accumulatedContent = ""
+
+      const assistantMessageId = `assistant-${Date.now()}`
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+        },
+      ])
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          console.log("[v0] Stream finished")
+          break
+        }
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split("\n").filter((line) => line.trim())
+
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line)
+
+            if (parsed.type === "text" && parsed.content) {
+              const cleanContent = parsed.content.replace(
+                /\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi,
+                "",
+              )
+
+              if (cleanContent.trim()) {
+                accumulatedContent += cleanContent
+                setMessages((prev) =>
+                  prev.map((msg) => (msg.id === assistantMessageId ? { ...msg, content: accumulatedContent } : msg)),
+                )
+              }
+            } else if (parsed.type === "properties" && Array.isArray(parsed.properties)) {
+              setProperties(parsed.properties)
+            }
+          } catch (e) {
+            // Skip unparseable lines
+          }
+        }
+      }
+
+      setIsLoading(false)
+    } catch (error) {
+      console.error("[v0] Error sending message:", error)
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          role: "assistant",
+          content: `Disculpa, hubo un problema. Por favor intenta de nuevo.`,
+        },
+      ])
+      setIsLoading(false)
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || status === "in_progress") return
-
-    sendMessage({ text: input })
-    setInput("")
-    setHasShownQuickReplies(true)
+    sendMessage(input)
   }
 
   const handlePropertyClick = (propertyId: number) => {
@@ -73,8 +171,7 @@ export function AIChatbot() {
   }
 
   const handleQuickReply = (text: string) => {
-    sendMessage({ text })
-    setHasShownQuickReplies(true)
+    sendMessage(text)
   }
 
   return (
@@ -132,160 +229,92 @@ export function AIChatbot() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 bg-gradient-to-b from-background via-background to-accent/5 scrollbar-thin scrollbar-thumb-primary/30 scrollbar-track-transparent">
-            {messages?.map((msg, idx) => (
-              <div key={msg.id}>
+            {messages.map((msg, idx) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+              >
                 <div
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                  className={`max-w-[85%] sm:max-w-[75%] ${
+                    msg.role === "user"
+                      ? "bg-gradient-to-br from-primary to-accent text-primary-foreground rounded-2xl rounded-br-sm shadow-lg"
+                      : "bg-card text-foreground border border-border/50 rounded-2xl rounded-bl-sm shadow-sm"
+                  } px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm`}
                 >
-                  <div
-                    className={`max-w-[85%] sm:max-w-[75%] ${
-                      msg.role === "user"
-                        ? "bg-gradient-to-br from-primary to-accent text-primary-foreground rounded-2xl rounded-br-sm shadow-lg"
-                        : "bg-card text-foreground border border-border/50 rounded-2xl rounded-bl-sm shadow-sm"
-                    } px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm`}
-                  >
-                    {msg.parts.map((part, partIdx) => {
-                      // Renderiza texto normal
-                      if (part.type === "text") {
-                        return (
-                          <div key={partIdx} className="whitespace-pre-wrap break-words">
-                            {part.text}
-                          </div>
-                        )
-                      }
+                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
 
-                      if (part.type === "tool-searchProperties") {
-                        switch (part.state) {
-                          case "input-available":
-                          case "input-streaming":
-                            return (
-                              <div key={partIdx} className="text-muted-foreground text-xs italic">
-                                Buscando propiedades...
-                              </div>
-                            )
-
-                          case "output-available":
-                            if (part.output.state === "loading") {
-                              return (
-                                <div key={partIdx} className="text-muted-foreground text-xs italic">
-                                  Consultando base de datos...
-                                </div>
-                              )
-                            }
-
-                            if (part.output.state === "error") {
-                              return (
-                                <div key={partIdx} className="text-destructive text-xs">
-                                  {part.output.error}
-                                </div>
-                              )
-                            }
-
-                            if (part.output.state === "ready") {
-                              const { properties, count } = part.output
-
-                              if (count === 0) {
-                                return (
-                                  <div key={partIdx} className="text-muted-foreground text-xs">
-                                    No encontré propiedades con esos criterios. ¿Quieres ajustar la búsqueda?
-                                  </div>
-                                )
-                              }
-
-                              return (
-                                <div key={partIdx} className="space-y-2 mt-2">
-                                  <p className="text-xs font-semibold">Encontré {count} propiedades:</p>
-                                  {properties.map((property: any) => (
-                                    <div
-                                      key={property.id}
-                                      className="bg-background/50 rounded-lg p-2 border border-border/30 shadow-sm hover:shadow-md transition-shadow"
-                                    >
-                                      {property.image_url && (
-                                        <div className="relative w-full h-20 sm:h-24 mb-2 rounded overflow-hidden">
-                                          <Image
-                                            src={property.image_url || "/placeholder.svg"}
-                                            alt={property.title}
-                                            fill
-                                            className="object-cover"
-                                            sizes="(max-width: 420px) 100vw, 420px"
-                                          />
-                                        </div>
-                                      )}
-                                      <p className="font-semibold text-xs sm:text-sm mb-1 line-clamp-2">
-                                        {property.title}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground line-clamp-1">{property.location}</p>
-                                      <p className="text-sm sm:text-base font-bold text-primary mt-1">
-                                        ${property.price}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground mb-2">
-                                        {property.bedrooms} hab • {property.bathrooms} baños • {property.area}m²
-                                      </p>
-
-                                      <Button
-                                        onClick={() => handlePropertyClick(property.id)}
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full text-xs bg-primary/5 hover:bg-primary/10 border-primary/20"
-                                      >
-                                        Ver detalles
-                                      </Button>
-                                    </div>
-                                  ))}
-
-                                  <Button
-                                    onClick={handleWhatsAppContact}
-                                    className="w-full mt-2 bg-[#25D366] hover:bg-[#20BA5A] text-white text-xs sm:text-sm py-2 sm:py-2.5"
-                                    size="sm"
-                                  >
-                                    <WhatsAppIcon />
-                                    <span className="ml-1 sm:ml-2 truncate">Agendar visita por WhatsApp</span>
-                                  </Button>
-                                </div>
-                              )
-                            }
-                            break
-
-                          case "output-error":
-                            return (
-                              <div key={partIdx} className="text-destructive text-xs">
-                                Error: {part.errorText}
-                              </div>
-                            )
-                        }
-                      }
-
-                      return null
-                    })}
-
-                    {/* Quick replies solo en el mensaje de bienvenida */}
-                    {idx === 0 && msg.role === "assistant" && !hasShownQuickReplies && (
-                      <div className="flex gap-2 mt-2 sm:mt-3 flex-wrap">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 text-xs sm:text-sm py-1 sm:py-2"
-                          onClick={() => handleQuickReply("alquilar")}
-                        >
-                          alquilar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 text-xs sm:text-sm py-1 sm:py-2"
-                          onClick={() => handleQuickReply("comprar")}
-                        >
-                          comprar
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  {idx === 0 && msg.role === "assistant" && !hasShownQuickReplies && (
+                    <div className="flex gap-2 mt-2 sm:mt-3 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 text-xs sm:text-sm py-1 sm:py-2"
+                        onClick={() => handleQuickReply("alquilar")}
+                      >
+                        alquilar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 text-xs sm:text-sm py-1 sm:py-2"
+                        onClick={() => handleQuickReply("comprar")}
+                      >
+                        comprar
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
 
-            {/* Loading indicator */}
-            {status === "in_progress" && (
+            {properties.length > 0 && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {properties.map((property: any) => (
+                  <div
+                    key={property.id}
+                    className="bg-card rounded-lg p-2 border border-border/50 shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    {property.image_url && (
+                      <div className="relative w-full h-20 sm:h-24 mb-2 rounded overflow-hidden">
+                        <Image
+                          src={property.image_url || "/placeholder.svg"}
+                          alt={property.title}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 420px) 100vw, 420px"
+                        />
+                      </div>
+                    )}
+                    <p className="font-semibold text-xs sm:text-sm mb-1 line-clamp-2">{property.title}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{property.location}</p>
+                    <p className="text-sm sm:text-base font-bold text-primary mt-1">${property.price}</p>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {property.bedrooms} hab • {property.bathrooms} baños • {property.area}m²
+                    </p>
+
+                    <Button
+                      onClick={() => handlePropertyClick(property.id)}
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs bg-primary/5 hover:bg-primary/10 border-primary/20"
+                    >
+                      Ver detalles
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  onClick={handleWhatsAppContact}
+                  className="w-full mt-2 bg-[#25D366] hover:bg-[#20BA5A] text-white text-xs sm:text-sm py-2 sm:py-2.5"
+                  size="sm"
+                >
+                  <WhatsAppIcon />
+                  <span className="ml-1 sm:ml-2 truncate">Agendar visita</span>
+                </Button>
+              </div>
+            )}
+
+            {isLoading && (
               <div className="flex justify-start">
                 <div className="flex gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 bg-card border border-border/50 rounded-2xl rounded-bl-sm shadow-sm">
                   <div
@@ -314,16 +343,16 @@ export function AIChatbot() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Escribe tu mensaje..."
-                disabled={status === "in_progress"}
+                disabled={isLoading}
                 className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm rounded-full bg-white dark:bg-slate-800 border border-primary/20 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-foreground/40 disabled:opacity-50"
               />
               <Button
                 type="submit"
                 size="sm"
-                disabled={status === "in_progress"}
+                disabled={isLoading}
                 className="px-2 sm:px-3 py-2 sm:py-2.5 h-auto bg-gradient-to-r from-primary to-accent hover:shadow-lg transition-all rounded-full flex items-center justify-center gap-1 sm:gap-2 flex-shrink-0"
               >
-                {status === "in_progress" ? (
+                {isLoading ? (
                   <Loader2 className="w-3 sm:w-4 h-3 sm:h-4 animate-spin" />
                 ) : (
                   <Send className="w-3 sm:w-4 h-3 sm:h-4" />
