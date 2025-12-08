@@ -671,6 +671,7 @@ export default function InmueblesAsesor() {
                       {(activeTab === "disponible" ||
                         activeTab === "alquilado" ||
                         activeTab === "vendido" ||
+                        activeTab === "deshabilitado" ||
                         property.owner_id === user?.id) && (
                         <>
                           {property.status !== "deshabilitado" && (
