@@ -40,7 +40,7 @@ tipo: tipo de inmueble
 habitaciones: numero
 [/BUSCAR_PROPIEDADES]
 
-DESPUÉS del bloque [/BUSCAR_PROPIEDADES], di solo: "Espérame un momento mientras busco las mejores opciones para ti."
+Espérame un momento mientras busco las mejores opciones para ti.
 
 REGLAS:
 - Respuestas MUY cortas (máximo 2 líneas)
@@ -153,7 +153,6 @@ WhatsApp: +58 (424) 429-1541`
 
             if (operacionMatch && ubicacionMatch && precioMaxMatch) {
               console.log("[v0] All required params present, searching database...")
-              console.log("[v0] DATABASE_URL present:", !!process.env.DATABASE_URL)
 
               const mysql = require("mysql2/promise")
 
@@ -161,47 +160,52 @@ WhatsApp: +58 (424) 429-1541`
                 const connection = await mysql.createConnection(process.env.DATABASE_URL)
                 console.log("[v0] Database connection established")
 
-                let query = "SELECT * FROM properties WHERE 1=1"
+                let query = `
+                  SELECT i.*, 
+                         (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id LIMIT 1) as image_url
+                  FROM inmueble i 
+                  WHERE i.status = 'disponible'
+                `
                 const params: any[] = []
 
                 const operacion = operacionMatch[1].toLowerCase()
                 if (operacion === "compra") {
-                  query += " AND (operation_type = 'compra' OR operation_type = 'ambos')"
+                  query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
                 } else if (operacion === "alquiler") {
-                  query += " AND (operation_type = 'alquiler' OR operation_type = 'ambos')"
+                  query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
                 }
 
                 const ubicacion = ubicacionMatch[1].trim()
-                query += " AND (city LIKE ? OR address LIKE ? OR location LIKE ?)"
-                params.push(`%${ubicacion}%`, `%${ubicacion}%`, `%${ubicacion}%`)
+                query += " AND i.location LIKE ?"
+                params.push(`%${ubicacion}%`)
 
                 const precioMax = Number.parseInt(precioMaxMatch[1])
                 const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
 
                 if (operacion === "compra") {
-                  query += " AND purchase_price <= ?"
+                  query += " AND i.purchase_price IS NOT NULL AND i.purchase_price <= ?"
                   params.push(precioMax)
                   if (precioMin > 0) {
-                    query += " AND purchase_price >= ?"
+                    query += " AND i.purchase_price >= ?"
                     params.push(precioMin)
                   }
                 } else {
-                  query += " AND rental_price <= ?"
+                  query += " AND i.rental_price IS NOT NULL AND i.rental_price <= ?"
                   params.push(precioMax)
                   if (precioMin > 0) {
-                    query += " AND rental_price >= ?"
+                    query += " AND i.rental_price >= ?"
                     params.push(precioMin)
                   }
                 }
 
                 if (tipoMatch) {
-                  const tipo = tipoMatch[1].trim()
-                  query += " AND property_type LIKE ?"
+                  const tipo = tipoMatch[1].trim().toLowerCase()
+                  query += " AND LOWER(i.property_type) LIKE ?"
                   params.push(`%${tipo}%`)
                 }
 
                 if (habitacionesMatch) {
-                  query += " AND bedrooms >= ?"
+                  query += " AND i.bedrooms >= ?"
                   params.push(Number.parseInt(habitacionesMatch[1]))
                 }
 
@@ -221,7 +225,7 @@ WhatsApp: +58 (424) 429-1541`
                   const propertiesToSend = rows.map((row: any) => ({
                     id: row.id,
                     title: row.title,
-                    location: row.location || `${row.city}, ${row.state}`,
+                    location: row.location,
                     price: operacion === "compra" ? row.purchase_price : row.rental_price,
                     bedrooms: row.bedrooms,
                     bathrooms: row.bathrooms,
