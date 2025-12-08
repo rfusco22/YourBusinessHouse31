@@ -22,7 +22,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Mensaje del sistema que define el comportamiento del chatbot
     const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional, amigable y experto de Your Business House en Venezuela. Tu misión es ayudar a los clientes a encontrar su hogar ideal de manera eficiente y personalizada.
 
 PERSONALIDAD:
@@ -34,45 +33,62 @@ PERSONALIDAD:
 TU PROCESO DE ASESORÍA (paso a paso):
 
 1. SALUDO INICIAL
-   - Saluda cordialmente: "¡Hola! Soy Hogarcito, tu agente inmobiliario virtual. Estoy aquí para ayudarte a encontrar tu próximo hogar en cualquier parte de Venezuela."
+   - Saluda cordialmente
    - Pregunta: "¿Estás buscando comprar o alquilar?"
 
-2. RECOPILAR INFORMACIÓN BÁSICA
-   - Tipo de operación: compra o alquiler
-   - Ubicación: ciudad o zona en Venezuela
-   - Presupuesto: rango de precio
-   - Tipo de inmueble: apartamento, casa, local, etc.
+2. RECOPILAR INFORMACIÓN ESENCIAL
+   Haz UNA pregunta a la vez en este orden:
+   a) Tipo de operación: comprar o alquilar
+   b) Ubicación: ¿En qué ciudad o zona de Venezuela?
+   c) Presupuesto: ¿Cuál es tu presupuesto aproximado?
+   d) Tipo de inmueble: ¿Casa, apartamento, local comercial, terreno?
 
-3. DETALLES ADICIONALES (si aplica)
+3. DETALLES OPCIONALES (solo si el cliente lo menciona)
    - Número de habitaciones
    - Número de baños
    - Área mínima
 
-4. BUSCAR Y PRESENTAR OPCIONES
-   - Cuando tengas suficiente información, busca propiedades
-   - Presenta las opciones de manera atractiva
-   - Destaca características importantes
+4. BUSCAR PROPIEDADES
+   Cuando tengas al menos: operación, ubicación y presupuesto, indica que vas a buscar con este formato EXACTO:
+   
+   [BUSCAR_PROPIEDADES]
+   operacion: compra o alquiler
+   ubicacion: [ciudad o zona]
+   precio_min: [número]
+   precio_max: [número]
+   tipo: [tipo de inmueble si lo especificó]
+   habitaciones: [número si lo especificó]
+   banos: [número si lo especificó]
+   [/BUSCAR_PROPIEDADES]
 
-5. CIERRE
-   - Pregunta si desean agendar una visita
-   - Ofrece contacto por WhatsApp: +58 (424) 429-1541
-   - Proporciona información de contacto adicional si la solicitan
+5. DESPUÉS DE MOSTRAR PROPIEDADES
+   - Si se muestran propiedades, di: "Aquí te muestro algunas opciones que encontré. ¿Te interesa alguna para agendar una visita?"
+   - Si no hay propiedades, di: "No encontré propiedades con esos criterios exactos. ¿Quieres que busque con criterios más flexibles?"
+   - Ofrece contacto directo: "También puedes contactarnos por WhatsApp al +58 (424) 429-1541"
 
 REGLAS DE COMUNICACIÓN:
-- Respuestas cortas y directas (máximo 2-3 líneas)
+- Respuestas MUY cortas (máximo 2 líneas)
 - UNA pregunta a la vez
-- Usa emojis ocasionalmente (🏠 🔑 ✨)
-- Si el cliente menciona varios criterios a la vez, tómalos todos en cuenta
-- Sé proactivo y natural en la conversación
+- Si el cliente da varios datos juntos, agradece y pide solo lo que falta
+- Usa emojis ocasionalmente: 🏠 🔑 ✨ 👍
+- No preguntes por detalles opcionales a menos que el cliente los mencione
+
+IMPORTANTE:
+- SIEMPRE usa el formato [BUSCAR_PROPIEDADES] cuando tengas suficiente información
+- NO ofrezcas "enviar por WhatsApp", las propiedades se mostrarán automáticamente en el chat
+- Sé breve y directo
 
 INFORMACIÓN DE CONTACTO:
-- Ubicación: CC El Añil, Valencia, Estado Carabobo, Venezuela
-- Cobertura: Toda Venezuela
 - WhatsApp: +58 (424) 429-1541
-- Instagram: @yourbusinesshouse
-- Email: info@yourbusinesshouse.com
+- Ubicación: CC El Añil, Valencia, Estado Carabobo, Venezuela
+- Instagram: @yourbusinesshouse`
 
-IMPORTANTE: Si te preguntan sobre propiedades disponibles, explica que puedes ayudarles a buscar opciones según sus necesidades. Pregunta por sus preferencias para hacer una búsqueda personalizada.`
+    const lastMessage = messages[messages.length - 1]?.content || ""
+    const allMessages = messages.map((m: any) => m.content).join(" ")
+
+    const propertiesToSend: any[] = []
+    const shouldSearchProperties = false
+    const searchParams: any = {}
 
     // Preparar mensajes para OpenAI
     const formattedMessages: Message[] = [
@@ -118,6 +134,7 @@ IMPORTANTE: Si te preguntan sobre propiedades disponibles, explica que puedes ay
           }
 
           let buffer = ""
+          let fullResponse = ""
 
           while (true) {
             const { done, value } = await reader.read()
@@ -138,12 +155,107 @@ IMPORTANTE: Si te preguntan sobre propiedades disponibles, explica que puedes ay
                   const content = parsed.choices?.[0]?.delta?.content
 
                   if (content) {
+                    fullResponse += content
                     const data = JSON.stringify({ type: "text", content })
                     controller.enqueue(encoder.encode(`${data}\n`))
                   }
                 } catch (e) {
                   console.error("Error parsing SSE:", e)
                 }
+              }
+            }
+          }
+
+          const searchMatch = fullResponse.match(/\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i)
+
+          if (searchMatch) {
+            const searchContent = searchMatch[1]
+            const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
+            const ubicacionMatch = searchContent.match(/ubicacion:\s*(.+?)$/im)
+            const precioMinMatch = searchContent.match(/precio_min:\s*(\d+)/i)
+            const precioMaxMatch = searchContent.match(/precio_max:\s*(\d+)/i)
+            const tipoMatch = searchContent.match(/tipo:\s*(.+?)$/im)
+            const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
+            const banosMatch = searchContent.match(/banos:\s*(\d+)/i)
+
+            if (operacionMatch && ubicacionMatch) {
+              // Conectar a base de datos y buscar propiedades
+              const mysql = require("mysql2/promise")
+              const connection = await mysql.createConnection(process.env.DATABASE_URL)
+
+              try {
+                let query = "SELECT * FROM properties WHERE 1=1"
+                const params: any[] = []
+
+                // Filtro de operación
+                const operacion = operacionMatch[1].toLowerCase()
+                if (operacion === "compra") {
+                  query += " AND (operation_type = 'compra' OR operation_type = 'ambos')"
+                } else if (operacion === "alquiler") {
+                  query += " AND (operation_type = 'alquiler' OR operation_type = 'ambos')"
+                }
+
+                // Filtro de ubicación
+                const ubicacion = ubicacionMatch[1].trim()
+                query += " AND (city LIKE ? OR address LIKE ? OR location LIKE ?)"
+                params.push(`%${ubicacion}%`, `%${ubicacion}%`, `%${ubicacion}%`)
+
+                // Filtro de precio
+                if (precioMinMatch && precioMaxMatch) {
+                  const precioMin = Number.parseInt(precioMinMatch[1])
+                  const precioMax = Number.parseInt(precioMaxMatch[1])
+
+                  if (operacion === "compra") {
+                    query += " AND purchase_price BETWEEN ? AND ?"
+                    params.push(precioMin, precioMax)
+                  } else {
+                    query += " AND rental_price BETWEEN ? AND ?"
+                    params.push(precioMin, precioMax)
+                  }
+                }
+
+                // Filtro de tipo
+                if (tipoMatch) {
+                  const tipo = tipoMatch[1].trim()
+                  query += " AND property_type LIKE ?"
+                  params.push(`%${tipo}%`)
+                }
+
+                // Filtro de habitaciones
+                if (habitacionesMatch) {
+                  query += " AND bedrooms >= ?"
+                  params.push(Number.parseInt(habitacionesMatch[1]))
+                }
+
+                // Filtro de baños
+                if (banosMatch) {
+                  query += " AND bathrooms >= ?"
+                  params.push(Number.parseInt(banosMatch[1]))
+                }
+
+                query += " LIMIT 5"
+
+                const [rows] = await connection.execute(query, params)
+
+                if (Array.isArray(rows) && rows.length > 0) {
+                  const properties = rows.map((row: any) => ({
+                    id: row.id,
+                    title: row.title,
+                    location: row.location || `${row.city}, ${row.state}`,
+                    price: operacion === "compra" ? row.purchase_price : row.rental_price,
+                    bedrooms: row.bedrooms,
+                    bathrooms: row.bathrooms,
+                    area: row.area,
+                    image_url: row.image_url,
+                  }))
+
+                  const propertiesData = JSON.stringify({ type: "properties", properties })
+                  controller.enqueue(encoder.encode(`${propertiesData}\n`))
+                }
+
+                await connection.end()
+              } catch (dbError) {
+                console.error("Database error:", dbError)
               }
             }
           }
