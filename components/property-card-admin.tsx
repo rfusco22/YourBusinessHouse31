@@ -87,7 +87,7 @@ const PropertyCardAdmin = ({
           <div className="flex flex-col sm:flex-row gap-2 mb-3">
             {property.status === "disponible" && (
               <>
-                {(property.operation_type === "venta" || property.operation_type === "ambos") && (
+                {(property.operation_type === "compra" || property.operation_type === "ambos") && (
                   <Button
                     onClick={() => onStatusChange(property.id, "vendido")}
                     className="flex-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs sm:text-sm"
