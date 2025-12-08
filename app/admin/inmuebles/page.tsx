@@ -108,6 +108,34 @@ export default function InmueblesAdmin() {
     fetchAllProperties(parsedUser.id)
   }, [router])
 
+  useEffect(() => {
+    if (!user?.id) return
+
+    console.log("[v0] Admin: Setting up SSE connection for real-time updates")
+    const eventSource = new EventSource("/api/events")
+
+    const handlePropertyEvent = () => {
+      console.log("[v0] Admin: Property event received, refreshing...")
+      fetchAllProperties(user.id)
+    }
+
+    eventSource.addEventListener("property-created", handlePropertyEvent)
+    eventSource.addEventListener("property-updated", handlePropertyEvent)
+    eventSource.addEventListener("property-status-changed", handlePropertyEvent)
+    eventSource.addEventListener("permission-approved", handlePropertyEvent)
+    eventSource.addEventListener("permission-rejected", handlePropertyEvent)
+
+    eventSource.onerror = (err) => {
+      console.error("[v0] Admin SSE error:", err)
+      eventSource.close()
+    }
+
+    return () => {
+      console.log("[v0] Admin: Closing SSE connection")
+      eventSource.close()
+    }
+  }, [user?.id])
+
   const fetchAllProperties = async (userId: number) => {
     console.log("[v0] Fetching properties for admin, userId:", userId)
     setIsLoading(true)

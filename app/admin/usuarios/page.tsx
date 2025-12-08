@@ -41,6 +41,32 @@ export default function AdminUsuarios() {
     loadUsers()
   }, [router])
 
+  useEffect(() => {
+    if (!user) return
+
+    console.log("[v0] Admin Usuarios: Setting up SSE connection")
+    const eventSource = new EventSource("/api/events")
+
+    const handleUserEvent = () => {
+      console.log("[v0] Admin Usuarios: User event received, refreshing...")
+      loadUsers()
+    }
+
+    eventSource.addEventListener("user-created", handleUserEvent)
+    eventSource.addEventListener("user-updated", handleUserEvent)
+    eventSource.addEventListener("user-deleted", handleUserEvent)
+
+    eventSource.onerror = (err) => {
+      console.error("[v0] Admin Usuarios SSE error:", err)
+      eventSource.close()
+    }
+
+    return () => {
+      console.log("[v0] Admin Usuarios: Closing SSE connection")
+      eventSource.close()
+    }
+  }, [user])
+
   const loadUsers = async () => {
     try {
       const response = await fetch("/api/admin/users")

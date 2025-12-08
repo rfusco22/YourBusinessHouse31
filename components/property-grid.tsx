@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Heart, MapPin, BedDouble, Bath, Ruler } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useLiveData } from "@/hooks/use-live-data"
 
 interface Property {
   id: number
@@ -32,65 +33,33 @@ interface PropertyGridProps {
 
 export function PropertyGrid({ filters, currentPage, onPageChange, onPropertyCountChange }: PropertyGridProps) {
   const [properties, setProperties] = useState<Property[]>([])
-  const [loading, setLoading] = useState(true)
+
+  const queryParams = new URLSearchParams()
+  queryParams.append("status", "disponible")
+  if (filters.searchTerm) queryParams.append("searchTerm", filters.searchTerm)
+  if (filters.city) queryParams.append("city", filters.city)
+  if (filters.state) queryParams.append("state", filters.state)
+  if (filters.type && filters.type !== "todos") queryParams.append("type", filters.type)
+  if (filters.priceMin) queryParams.append("priceMin", filters.priceMin)
+  if (filters.priceMax) queryParams.append("priceMax", filters.priceMax)
+  if (filters.bedrooms) queryParams.append("bedrooms", filters.bedrooms)
+  if (filters.bathrooms) queryParams.append("bathrooms", filters.bathrooms)
+  if (filters.area) queryParams.append("area", filters.area)
+  if (filters.operacion) queryParams.append("operacion", filters.operacion)
+
+  const { data, loading } = useLiveData<{ data: Property[] }>({
+    endpoint: `/api/properties?${queryParams.toString()}`,
+    interval: 10000,
+  })
 
   useEffect(() => {
-    const fetchProperties = async () => {
-      try {
-        setLoading(true)
-        const queryParams = new URLSearchParams()
-        queryParams.append("status", "disponible")
-
-        if (filters.searchTerm) queryParams.append("searchTerm", filters.searchTerm)
-        if (filters.city) queryParams.append("city", filters.city)
-        if (filters.state) queryParams.append("state", filters.state)
-        if (filters.type && filters.type !== "todos") queryParams.append("type", filters.type)
-        if (filters.priceMin) queryParams.append("priceMin", filters.priceMin)
-        if (filters.priceMax) queryParams.append("priceMax", filters.priceMax)
-        if (filters.bedrooms) queryParams.append("bedrooms", filters.bedrooms)
-        if (filters.bathrooms) queryParams.append("bathrooms", filters.bathrooms)
-        if (filters.area) queryParams.append("area", filters.area)
-        if (filters.operacion) queryParams.append("operacion", filters.operacion)
-
-        console.log("============ FILTRADO DEBUG ============")
-        console.log("Filtros enviados:", filters)
-        console.log("Operación seleccionada:", filters.operacion)
-        console.log("URL completa:", `/api/properties?${queryParams.toString()}`)
-        console.log("=======================================")
-
-        const response = await fetch(`/api/properties?${queryParams.toString()}`)
-        if (!response.ok) throw new Error("Failed to fetch properties")
-
-        const result = await response.json()
-
-        console.log("============ RESULTADOS DEBUG ============")
-        console.log("Total propiedades recibidas:", result.data?.length || 0)
-        console.log(
-          "Propiedades:",
-          result.data?.map((p: Property) => ({
-            id: p.id,
-            title: p.title,
-            operation_type: p.operation_type,
-            rental_price: p.rental_price,
-            purchase_price: p.purchase_price,
-          })),
-        )
-        console.log("=======================================")
-
-        setProperties(result.data || [])
-        onPropertyCountChange(result.data?.length || 0)
-        onPageChange(1)
-      } catch (error) {
-        console.error("Error fetching properties:", error)
-        setProperties([])
-        onPropertyCountChange(0)
-      } finally {
-        setLoading(false)
-      }
+    if (data?.data) {
+      console.log("[v0] PropertyGrid: Properties updated from SSE/polling")
+      setProperties(data.data)
+      onPropertyCountChange(data.data.length)
+      onPageChange(1)
     }
-
-    fetchProperties()
-  }, [filters, onPageChange, onPropertyCountChange])
+  }, [data, onPropertyCountChange, onPageChange])
 
   if (loading) {
     return (

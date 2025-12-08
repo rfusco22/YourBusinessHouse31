@@ -74,6 +74,34 @@ export default function AsesorDashboard() {
     fetchDashboardData(userData.id)
   }, [router])
 
+  useEffect(() => {
+    if (!user?.id) return
+
+    console.log("[v0] Asesor Dashboard: Setting up SSE connection")
+    const eventSource = new EventSource("/api/events")
+
+    const handleDataUpdate = () => {
+      console.log("[v0] Asesor Dashboard: Event received, refreshing...")
+      fetchDashboardData(user.id)
+    }
+
+    eventSource.addEventListener("property-created", handleDataUpdate)
+    eventSource.addEventListener("property-updated", handleDataUpdate)
+    eventSource.addEventListener("property-status-changed", handleDataUpdate)
+    eventSource.addEventListener("alert-created", handleDataUpdate)
+    eventSource.addEventListener("alert-resolved", handleDataUpdate)
+
+    eventSource.onerror = (err) => {
+      console.error("[v0] Asesor Dashboard SSE error:", err)
+      eventSource.close()
+    }
+
+    return () => {
+      console.log("[v0] Asesor Dashboard: Closing SSE connection")
+      eventSource.close()
+    }
+  }, [user?.id])
+
   const fetchDashboardData = async (userId: number) => {
     try {
       setIsLoading(true)

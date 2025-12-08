@@ -84,13 +84,35 @@ export default function AdminAlertas() {
     setUser(parsedUser)
     loadAlerts(parsedUser.id, parsedUser.role)
     setIsLoading(false)
-
-    const intervalId = setInterval(() => {
-      loadAlerts(parsedUser.id, parsedUser.role)
-    }, 60000)
-
-    return () => clearInterval(intervalId)
   }, [router])
+
+  useEffect(() => {
+    if (!user) return
+
+    console.log("[v0] Admin Alertas: Setting up SSE connection")
+    const eventSource = new EventSource("/api/events")
+
+    const handleAlertUpdate = () => {
+      console.log("[v0] Admin Alertas: Event received, refreshing...")
+      if (user.id && user.role) {
+        loadAlerts(user.id, user.role)
+      }
+    }
+
+    eventSource.addEventListener("alert-created", handleAlertUpdate)
+    eventSource.addEventListener("alert-resolved", handleAlertUpdate)
+    eventSource.addEventListener("property-status-changed", handleAlertUpdate)
+
+    eventSource.onerror = (err) => {
+      console.error("[v0] Admin Alertas SSE error:", err)
+      eventSource.close()
+    }
+
+    return () => {
+      console.log("[v0] Admin Alertas: Closing SSE connection")
+      eventSource.close()
+    }
+  }, [user])
 
   const loadAlerts = async (userId: number, userRole: string) => {
     setLoadingAlerts(true)

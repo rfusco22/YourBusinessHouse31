@@ -92,6 +92,36 @@ export default function GerenciaInmuebles() {
     setIsLoading(false)
   }, [router])
 
+  useEffect(() => {
+    if (!user?.id) return
+
+    console.log("[v0] Gerencia Inmuebles: Setting up SSE connection")
+    const eventSource = new EventSource("/api/events")
+
+    const handlePropertyEvent = () => {
+      console.log("[v0] Gerencia: Property event received, refreshing...")
+      if (user?.id) {
+        loadProperties(user.id)
+      }
+    }
+
+    eventSource.addEventListener("property-created", handlePropertyEvent)
+    eventSource.addEventListener("property-updated", handlePropertyEvent)
+    eventSource.addEventListener("property-status-changed", handlePropertyEvent)
+    eventSource.addEventListener("permission-approved", handlePropertyEvent)
+    eventSource.addEventListener("permission-rejected", handlePropertyEvent)
+
+    eventSource.onerror = (err) => {
+      console.error("[v0] Gerencia SSE error:", err)
+      eventSource.close()
+    }
+
+    return () => {
+      console.log("[v0] Gerencia: Closing SSE connection")
+      eventSource.close()
+    }
+  }, [user?.id])
+
   const loadProperties = async (userId: number) => {
     try {
       // Fetch user's own properties

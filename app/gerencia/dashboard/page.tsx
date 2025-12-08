@@ -49,6 +49,8 @@ export default function GerenciaDashboard() {
   }, [router])
 
   useEffect(() => {
+    if (isLoading) return
+
     const fetchDashboardData = async () => {
       try {
         setDataLoading(true)
@@ -72,8 +74,31 @@ export default function GerenciaDashboard() {
       }
     }
 
-    if (!isLoading) {
+    fetchDashboardData()
+
+    console.log("[v0] Gerencia Dashboard: Setting up SSE connection")
+    const eventSource = new EventSource("/api/events")
+
+    const handleDashboardUpdate = () => {
+      console.log("[v0] Gerencia Dashboard: Event received, refreshing...")
       fetchDashboardData()
+    }
+
+    eventSource.addEventListener("property-created", handleDashboardUpdate)
+    eventSource.addEventListener("property-updated", handleDashboardUpdate)
+    eventSource.addEventListener("property-status-changed", handleDashboardUpdate)
+    eventSource.addEventListener("user-created", handleDashboardUpdate)
+    eventSource.addEventListener("user-updated", handleDashboardUpdate)
+    eventSource.addEventListener("alert-created", handleDashboardUpdate)
+
+    eventSource.onerror = (err) => {
+      console.error("[v0] Gerencia Dashboard SSE error:", err)
+      eventSource.close()
+    }
+
+    return () => {
+      console.log("[v0] Gerencia Dashboard: Closing SSE connection")
+      eventSource.close()
     }
   }, [isLoading])
 
