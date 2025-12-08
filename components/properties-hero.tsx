@@ -6,7 +6,7 @@ export function PropertiesHero() {
       {/* Background video with high quality */}
       <div className="absolute inset-0 z-0">
         <video autoPlay muted loop playsInline className="w-full h-full object-cover">
-          <source src="/heroinmueble.MP4" type="video/mp4" />
+          <source src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/heroinmueble-xOMLNbsdZRxqAjC9GQe49nTuFqJCGK.MP4" type="video/mp4" />
           <img
             src="/luxury-property-hero.png"
             alt="Fondo de propiedades de lujo"
