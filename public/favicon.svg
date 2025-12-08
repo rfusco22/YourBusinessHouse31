@@ -1,0 +1,26 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle for better visibility -->
+  <rect width="32" height="32" rx="6" fill="#1a1a1a"/>
+  
+  <!-- Simplified window icon in gold -->
+  <g transform="translate(6, 6)">
+    <!-- Outer frame -->
+    <path d="M0 2C0 0.895431 0.895431 0 2 0H18C19.1046 0 20 0.895431 20 2V18C20 19.1046 19.1046 20 18 20H2C0.895431 20 0 19.1046 0 18V2Z" 
+          fill="url(#gold-gradient)"/>
+    
+    <!-- Window panes (white) -->
+    <rect x="2.5" y="2.5" width="7" height="7" fill="white" rx="0.5"/>
+    <rect x="10.5" y="2.5" width="7" height="7" fill="white" rx="0.5"/>
+    <rect x="2.5" y="10.5" width="7" height="7" fill="white" rx="0.5"/>
+    <rect x="10.5" y="10.5" width="7" height="7" fill="white" rx="0.5"/>
+  </g>
+  
+  <!-- Gold gradient definition -->
+  <defs>
+    <linearGradient id="gold-gradient" x1="0" y1="0" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D4AF37"/>
+      <stop offset="50%" stop-color="#F5E6A8"/>
+      <stop offset="100%" stop-color="#B8941E"/>
+    </linearGradient>
+  </defs>
+</svg>
