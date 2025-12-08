@@ -1,6 +1,6 @@
 "use client"
 
-import { Facebook, Instagram, Twitter, Linkedin } from "lucide-react"
+import { Facebook, Instagram, Twitter, Linkedin, MessageCircle } from "lucide-react"
 import { useState } from "react"
 
 interface SocialMediaSectionProps {
@@ -12,6 +12,7 @@ interface SocialMediaSectionProps {
     tiktok?: string
     youtube?: string
     whatsapp?: string
+    phone?: string
   }
 }
 
@@ -94,15 +95,23 @@ export function SocialMediaSection({ agent }: SocialMediaSectionProps) {
     } as any)
   }
 
+  if (agent.whatsapp || agent.phone) {
+    activePlatforms.push({
+      name: "WhatsApp",
+      icon: MessageCircle,
+      value: agent.whatsapp || agent.phone,
+      gradient: "from-green-500 to-green-600",
+      shadowColor: "shadow-green-500/50",
+    } as any)
+  }
+
   if (activePlatforms.length === 0) {
     return null
   }
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-serif font-semibold text-foreground tracking-wide">
-        Conecta con {agent.whatsapp ? "nosotros" : "él"}
-      </h3>
+      <h3 className="text-lg font-serif font-semibold text-foreground tracking-wide">Conecta con nosotros</h3>
 
       <div className="flex flex-wrap gap-5">
         {activePlatforms.map((platform) => {

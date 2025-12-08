@@ -1,4 +1,4 @@
-import { Star, Phone, Mail } from "lucide-react"
+import { Phone, Mail } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { SocialMediaSection } from "./social-media-section"
@@ -71,14 +71,6 @@ export function AgentCard({ agent }: AgentCardProps) {
         <p className="text-sm text-primary font-medium mb-3">Asesor Inmobiliario</p>
 
         {/* Rating */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="w-4 h-4 fill-secondary text-secondary" />
-            ))}
-          </div>
-          <span className="text-sm text-muted-foreground">{mockRating}</span>
-        </div>
 
         {(agent.instagram ||
           agent.facebook ||
@@ -86,7 +78,8 @@ export function AgentCard({ agent }: AgentCardProps) {
           agent.linkedin ||
           agent.tiktok ||
           agent.youtube ||
-          agent.whatsapp) && (
+          agent.whatsapp ||
+          agent.phone) && (
           <div className="mb-6 pb-6 border-b border-border">
             <SocialMediaSection agent={agent} />
           </div>
