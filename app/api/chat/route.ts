@@ -1,192 +1,29 @@
-import { streamText, tool } from "ai"
-import { z } from "zod"
-import { query } from "@/lib/db"
-
 export const maxDuration = 60
 
-function getAIModel() {
-  // Prioridad: Groq (gratis) > OpenAI > AI Gateway de Vercel
-  if (process.env.GROQ_API_KEY) {
-    return "groq/llama-3.3-70b-versatile"
-  } else if (process.env.OPENAI_API_KEY) {
-    return "openai/gpt-4o-mini"
-  } else {
-    // Vercel AI Gateway (requiere despliegue en Vercel)
-    return "openai/gpt-4o-mini"
-  }
+interface Message {
+  role: string
+  content: string
 }
 
 export async function POST(request: Request) {
   try {
-    console.log("[v0] Chat API called")
-
     const { messages } = await request.json()
-    console.log("[v0] Received messages:", messages?.length || 0)
 
     if (!messages || !Array.isArray(messages)) {
       throw new Error("Messages array is required")
     }
 
-    const hasApiKey = !!(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || process.env.VERCEL)
+    // Verificar que tengamos API key de OpenAI
+    const apiKey = process.env.OPENAI_API_KEY
 
-    if (!hasApiKey) {
-      console.error("[v0] ❌ NO API KEY FOUND! Please configure GROQ_API_KEY or OPENAI_API_KEY")
+    if (!apiKey) {
       throw new Error(
-        "API key no configurada. Por favor configura GROQ_API_KEY o OPENAI_API_KEY en las variables de entorno.",
+        "OPENAI_API_KEY no configurada. Por favor agrega tu API key de OpenAI en las variables de entorno.",
       )
     }
 
-    const aiModel = getAIModel()
-    console.log("[v0] Using AI model:", aiModel)
-
-    const searchPropertiesTool = tool({
-      description:
-        "Busca propiedades inmobiliarias en toda Venezuela basándose en los criterios del usuario. Usa esta herramienta cuando tengas suficiente información sobre qué busca el cliente (operación, ubicación o presupuesto).",
-      inputSchema: z.object({
-        operationType: z.enum(["compra", "alquiler"]).optional().describe("Tipo de operación: compra o alquiler"),
-        location: z
-          .string()
-          .optional()
-          .describe(
-            "Ubicación deseada en cualquier parte de Venezuela (Valencia, Caracas, Maracaibo, Barquisimeto, ciudad, estado, zona, etc.)",
-          ),
-        maxPrice: z.number().optional().describe("Precio máximo en USD"),
-        minPrice: z.number().optional().describe("Precio mínimo en USD"),
-        propertyType: z
-          .string()
-          .optional()
-          .describe("Tipo de propiedad: apartamento, casa, local comercial, oficina, terreno, quinta"),
-        bedrooms: z.number().optional().describe("Número mínimo de habitaciones"),
-        bathrooms: z.number().optional().describe("Número mínimo de baños"),
-      }),
-      execute: async ({ operationType, location, maxPrice, minPrice, propertyType, bedrooms, bathrooms }) => {
-        console.log("[v0] Executing searchProperties tool with:", {
-          operationType,
-          location,
-          maxPrice,
-          minPrice,
-          propertyType,
-          bedrooms,
-          bathrooms,
-        })
-
-        let sqlQuery = `
-          SELECT i.*, u.name as owner_name, u.phone as owner_phone
-          FROM inmueble i 
-          LEFT JOIN users u ON i.owner_id = u.id 
-          WHERE i.status = 'disponible'
-        `
-        const params: any[] = []
-
-        if (operationType) {
-          if (operationType === "alquiler") {
-            sqlQuery += ` AND i.operation_type IN ('alquiler', 'ambos')`
-          } else if (operationType === "compra") {
-            sqlQuery += ` AND i.operation_type IN ('compra', 'ambos')`
-          }
-        }
-
-        if (location) {
-          const locationTerms = location.split(/[,\s]+/).filter((term) => term.length > 2)
-          if (locationTerms.length > 0) {
-            sqlQuery += ` AND (`
-            const locationConditions = locationTerms.map(() => `i.location LIKE ?`).join(" OR ")
-            sqlQuery += locationConditions + `)`
-            locationTerms.forEach((term) => params.push(`%${term}%`))
-          }
-        }
-
-        if (maxPrice) {
-          if (operationType === "alquiler") {
-            sqlQuery += ` AND i.rental_price <= ?`
-          } else if (operationType === "compra") {
-            sqlQuery += ` AND i.purchase_price <= ?`
-          } else {
-            sqlQuery += ` AND (i.rental_price <= ? OR i.purchase_price <= ?)`
-            params.push(maxPrice)
-          }
-          params.push(maxPrice)
-        }
-
-        if (minPrice) {
-          if (operationType === "alquiler") {
-            sqlQuery += ` AND i.rental_price >= ?`
-          } else if (operationType === "compra") {
-            sqlQuery += ` AND i.purchase_price >= ?`
-          } else {
-            sqlQuery += ` AND (i.rental_price >= ? OR i.purchase_price >= ?)`
-            params.push(minPrice)
-          }
-          params.push(minPrice)
-        }
-
-        if (propertyType) {
-          sqlQuery += ` AND i.type = ?`
-          params.push(propertyType)
-        }
-
-        if (bedrooms) {
-          sqlQuery += ` AND i.bedrooms >= ?`
-          params.push(bedrooms)
-        }
-
-        if (bathrooms) {
-          sqlQuery += ` AND i.bathrooms >= ?`
-          params.push(bathrooms)
-        }
-
-        sqlQuery += ` ORDER BY i.created_at DESC LIMIT 5`
-
-        const properties = (await query(sqlQuery, params)) as any[]
-        console.log("[v0] Found properties:", properties.length)
-
-        const propertiesWithImages = await Promise.all(
-          properties.map(async (p: any) => {
-            const images = (await query(
-              `SELECT image_url FROM inmueble_images WHERE inmueble_id = ? ORDER BY display_order ASC LIMIT 1`,
-              [p.id],
-            )) as any[]
-
-            let displayPrice = p.rental_price || p.purchase_price || p.price
-            if (operationType === "alquiler" && p.rental_price) {
-              displayPrice = p.rental_price
-            } else if (operationType === "compra" && p.purchase_price) {
-              displayPrice = p.purchase_price
-            }
-
-            return {
-              id: p.id,
-              title: p.title,
-              location: p.location,
-              price: displayPrice,
-              bedrooms: p.bedrooms,
-              bathrooms: p.bathrooms,
-              area: p.area,
-              type: p.type,
-              operation_type: p.operation_type,
-              image_url: images.length > 0 ? images[0].image_url : p.image_url,
-            }
-          }),
-        )
-
-        return {
-          properties: propertiesWithImages,
-          count: propertiesWithImages.length,
-        }
-      },
-    })
-
-    console.log("[v0] Calling AI model via Vercel AI Gateway...")
-
-    const formattedMessages = messages.map((m: any) => ({
-      role: m.role === "user" ? "user" : "assistant",
-      content: m.content || "",
-    }))
-
-    const result = streamText({
-      model: aiModel,
-      messages: formattedMessages,
-      system: `Eres Hogarcito, un asesor inmobiliario profesional, amigable y experto de Your Business House en Venezuela. Tu misión es ayudar a los clientes a encontrar su hogar ideal de manera eficiente y personalizada.
+    // Mensaje del sistema que define el comportamiento del chatbot
+    const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional, amigable y experto de Your Business House en Venezuela. Tu misión es ayudar a los clientes a encontrar su hogar ideal de manera eficiente y personalizada.
 
 PERSONALIDAD:
 - Profesional pero cercano, como un asesor venezolano experimentado
@@ -196,114 +33,124 @@ PERSONALIDAD:
 
 TU PROCESO DE ASESORÍA (paso a paso):
 
-1. SALUDO Y TIPO DE OPERACIÓN
-   - Saluda cordialmente si es el primer mensaje
-   - Pregunta: "¿Estás buscando comprar o alquilar una propiedad?"
-   - Respuestas válidas: comprar, alquilar, venta, renta, arriendo
+1. SALUDO INICIAL
+   - Saluda cordialmente: "¡Hola! Soy Hogarcito, tu agente inmobiliario virtual. Estoy aquí para ayudarte a encontrar tu próximo hogar en cualquier parte de Venezuela."
+   - Pregunta: "¿Estás buscando comprar o alquilar?"
 
-2. UBICACIÓN
-   - Pregunta: "¿En qué ciudad o zona de Venezuela te gustaría tu nueva propiedad?"
-   - Acepta cualquier ciudad/zona: Caracas, Valencia, Maracaibo, Barquisimeto, etc.
-   - Si mencionan una zona específica (Naguanagua, San Diego, etc.), tómala en cuenta
+2. RECOPILAR INFORMACIÓN BÁSICA
+   - Tipo de operación: compra o alquiler
+   - Ubicación: ciudad o zona en Venezuela
+   - Presupuesto: rango de precio
+   - Tipo de inmueble: apartamento, casa, local, etc.
 
-3. PRESUPUESTO
-   - Para ALQUILER: "¿Cuál es tu presupuesto mensual para el canon de arrendamiento?"
-   - Para COMPRA: "¿Cuál es tu presupuesto de compra?"
-   - Acepta cantidades en USD (asumir USD si no especifican)
-   - Ejemplos: "280", "$500", "1000 dólares"
+3. DETALLES ADICIONALES (si aplica)
+   - Número de habitaciones
+   - Número de baños
+   - Área mínima
 
-4. TIPO DE INMUEBLE
-   - Pregunta: "¿Qué tipo de inmueble buscas?"
-   - Opciones: apartamento, casa, townhouse, local comercial, oficina, terreno, quinta
-   - Si no están seguros, ofrece opciones comunes
+4. BUSCAR Y PRESENTAR OPCIONES
+   - Cuando tengas suficiente información, busca propiedades
+   - Presenta las opciones de manera atractiva
+   - Destaca características importantes
 
-5. CARACTERÍSTICAS (para residencial)
-   - Habitaciones: "¿Cuántas habitaciones necesitas?"
-   - Baños: "¿Cuántos baños prefieres?"
-   - Área: "¿Tienes preferencia de metros cuadrados?"
-
-6. BÚSQUEDA AUTOMÁTICA
-   - EJECUTA searchProperties cuando tengas: operación + ubicación O presupuesto
-   - Si encuentras propiedades, descríbelas brevemente y con entusiasmo
-   - Menciona las características más atractivas de cada una
-
-7. CIERRE Y SIGUIENTE PASO
-   - Después de mostrar resultados: "¿Te gustaría agendar una visita para conocer alguna de estas propiedades?"
-   - Ofrece contacto por WhatsApp para coordinar la cita
-   - Si no hay resultados, ofrece ampliar los criterios o recibir notificaciones
+5. CIERRE
+   - Pregunta si desean agendar una visita
+   - Ofrece contacto por WhatsApp: +58 (424) 429-1541
+   - Proporciona información de contacto adicional si la solicitan
 
 REGLAS DE COMUNICACIÓN:
 - Respuestas cortas y directas (máximo 2-3 líneas)
 - UNA pregunta a la vez
-- Usa emojis ocasionalmente para ser más cercano (🏠 🔑 ✨)
-- Si el cliente cambia de idea (alquiler→compra), ajústate inmediatamente
-- Sé proactivo: si detectas que tienen toda la info, busca automáticamente
+- Usa emojis ocasionalmente (🏠 🔑 ✨)
+- Si el cliente menciona varios criterios a la vez, tómalos todos en cuenta
+- Sé proactivo y natural en la conversación
 
-INFORMACIÓN DE LA EMPRESA:
+INFORMACIÓN DE CONTACTO:
 - Ubicación: CC El Añil, Valencia, Estado Carabobo, Venezuela
 - Cobertura: Toda Venezuela
-- Servicios: Compra, venta y alquiler en toda Venezuela con asesoría personalizada
-- Instagram: @yourbusinesshouse
 - WhatsApp: +58 (424) 429-1541
+- Instagram: @yourbusinesshouse
 - Email: info@yourbusinesshouse.com
 
-MANEJO DE OTRAS PREGUNTAS:
-- Si preguntan sobre financiamiento: "Trabajamos con varias entidades financieras. ¿Te gustaría más información?"
-- Si preguntan por servicios: "Ofrecemos compra, venta y alquiler en toda Venezuela con asesoría personalizada"
-- Si piden contacto: Ofrece WhatsApp y redes sociales
+IMPORTANTE: Si te preguntan sobre propiedades disponibles, explica que puedes ayudarles a buscar opciones según sus necesidades. Pregunta por sus preferencias para hacer una búsqueda personalizada.`
 
-RECUERDA: Tu objetivo es automatizar el proceso de búsqueda y llevar al cliente a agendar una visita. Sé eficiente, profesional y siempre enfocado en ayudarlos a encontrar su hogar ideal.`,
-      tools: {
-        searchProperties: searchPropertiesTool,
+    // Preparar mensajes para OpenAI
+    const formattedMessages: Message[] = [
+      { role: "system", content: systemMessage },
+      ...messages.map((m: any) => ({
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.content || "",
+      })),
+    ]
+
+    // Llamar a la API de OpenAI directamente
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
       },
-      maxSteps: 5,
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: formattedMessages,
+        temperature: 0.7,
+        max_tokens: 500,
+        stream: true,
+      }),
     })
 
-    console.log("[v0] AI model responded, creating stream...")
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("OpenAI API error:", errorData)
+      throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`)
+    }
 
+    // Crear stream de respuesta
     const encoder = new TextEncoder()
+    const decoder = new TextDecoder()
+
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          console.log("[v0] Starting to stream text...")
-          let textChunks = 0
-
-          for await (const chunk of result.textStream) {
-            textChunks++
-            console.log(`[v0] Streaming text chunk #${textChunks}:`, chunk.substring(0, 50))
-            const data = JSON.stringify({ type: "text", content: chunk })
-            controller.enqueue(encoder.encode(`${data}\n`))
+          const reader = response.body?.getReader()
+          if (!reader) {
+            throw new Error("No reader available")
           }
 
-          console.log("[v0] Finished streaming text, total chunks:", textChunks)
+          let buffer = ""
 
-          const response = await result.response
-          if (response.messages && response.messages.length > 0) {
-            for (const message of response.messages) {
-              if (message.role === "assistant" && message.content) {
-                for (const part of message.content) {
-                  if (part.type === "tool-call" && part.toolName === "searchProperties") {
-                    const toolResultMessage = response.messages.find(
-                      (m: any) => m.role === "tool" && m.content?.some((c: any) => c.toolCallId === part.toolCallId),
-                    )
-                    if (toolResultMessage) {
-                      const toolResult = toolResultMessage.content?.find((c: any) => c.toolCallId === part.toolCallId)
-                      if (toolResult?.result?.properties) {
-                        console.log("[v0] Sending property results:", toolResult.result.properties.length)
-                        const data = JSON.stringify({ type: "properties", properties: toolResult.result.properties })
-                        controller.enqueue(encoder.encode(`${data}\n`))
-                      }
-                    }
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split("\n")
+            buffer = lines.pop() || ""
+
+            for (const line of lines) {
+              const trimmedLine = line.trim()
+              if (!trimmedLine || trimmedLine === "data: [DONE]") continue
+
+              if (trimmedLine.startsWith("data: ")) {
+                try {
+                  const jsonStr = trimmedLine.slice(6)
+                  const parsed = JSON.parse(jsonStr)
+                  const content = parsed.choices?.[0]?.delta?.content
+
+                  if (content) {
+                    const data = JSON.stringify({ type: "text", content })
+                    controller.enqueue(encoder.encode(`${data}\n`))
                   }
+                } catch (e) {
+                  console.error("Error parsing SSE:", e)
                 }
               }
             }
           }
 
-          console.log("[v0] Stream complete, closing")
           controller.close()
         } catch (error) {
-          console.error("[v0] Stream error:", error)
+          console.error("Stream error:", error)
           const errorData = JSON.stringify({
             type: "text",
             content: "Disculpa, tuve un problema. ¿Podrías intentarlo de nuevo?",
@@ -322,21 +169,17 @@ RECUERDA: Tu objetivo es automatizar el proceso de búsqueda y llevar al cliente
       },
     })
   } catch (error) {
-    console.error("[v0] Error in chat API:", error)
-    if (error instanceof Error) {
-      console.error("[v0] Error name:", error.name)
-      console.error("[v0] Error message:", error.message)
-      console.error("[v0] Error stack:", error.stack)
-    }
+    console.error("Error in chat API:", error)
 
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
         const errorMsg = error instanceof Error ? error.message : "Error desconocido"
-        let userMessage = "Disculpa, hubo un problema técnico. Por favor intenta de nuevo en unos segundos."
+        let userMessage = "Disculpa, hubo un problema técnico. Por favor intenta de nuevo."
 
-        if (errorMsg.includes("API key")) {
-          userMessage = "El chatbot no está configurado correctamente. Por favor contacta al administrador del sitio."
+        if (errorMsg.includes("OPENAI_API_KEY")) {
+          userMessage =
+            "El chatbot necesita configuración. Por favor contacta al administrador para agregar la API key de OpenAI."
         }
 
         const data = JSON.stringify({
@@ -349,6 +192,7 @@ RECUERDA: Tu objetivo es automatizar el proceso de búsqueda y llevar al cliente
     })
 
     return new Response(stream, {
+      status: 200,
       headers: {
         "Content-Type": "text/plain",
         "Cache-Control": "no-cache",
