@@ -119,14 +119,6 @@ export function Footer() {
             <p className="text-sm opacity-80">&copy; 2025 YourBusinessHouse. Todos los derechos reservados.</p>
             <div className="flex gap-4">
               <a
-                href="https://www.facebook.com/yourbusinesshouse"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="opacity-80 hover:opacity-100 transition-opacity"
-              >
-                <Facebook className="w-5 h-5" />
-              </a>
-              <a
                 href="https://www.instagram.com/yourbusinesshouse"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -141,14 +133,6 @@ export function Footer() {
                 className="opacity-80 hover:opacity-100 transition-opacity"
               >
                 <MessageCircle className="w-5 h-5" />
-              </a>
-              <a
-                href="https://twitter.com/yourbusinesshouse"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="opacity-80 hover:opacity-100 transition-opacity"
-              >
-                <Twitter className="w-5 h-5" />
               </a>
             </div>
           </div>
