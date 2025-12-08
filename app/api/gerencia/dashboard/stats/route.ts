@@ -26,6 +26,9 @@ export async function GET() {
     `)) as any[]
     const totalMovements = movementsResult[0]?.count || 0
 
+    console.log("[v0] Gerencia - Total movements in bitacora:", totalMovements)
+    // </CHANGE>
+
     // Active alerts (properties inactive for more than 30 days)
     const alertsResult = (await query(`
       SELECT 
@@ -95,20 +98,22 @@ export async function GET() {
       user_name: row.user_name,
     }))
 
-    // User activity stats (movements per user this month)
     const activityByUserResult = (await query(`
       SELECT 
         u.name as usuario,
         COUNT(b.id) as movimientos
       FROM users u
-      INNER JOIN bitacora b ON u.id = b.user_id
-      WHERE MONTH(b.created_at) = MONTH(CURDATE())
+      LEFT JOIN bitacora b ON u.id = b.user_id 
+        AND MONTH(b.created_at) = MONTH(CURDATE())
         AND YEAR(b.created_at) = YEAR(CURDATE())
       GROUP BY u.id, u.name
       HAVING movimientos > 0
       ORDER BY movimientos DESC
       LIMIT 15
     `)) as any[]
+
+    console.log("[v0] Gerencia - Activity by user result:", activityByUserResult)
+    // </CHANGE>
 
     // Total active users this month
     const totalActiveUsersResult = (await query(`
@@ -130,7 +135,7 @@ export async function GET() {
       totalActiveUsers,
     })
   } catch (error) {
-    console.error("Error fetching gerencia dashboard stats:", error)
+    console.error("[v0] Error fetching gerencia dashboard stats:", error)
     return NextResponse.json({ error: "Error al cargar las estadísticas" }, { status: 500 })
   }
 }

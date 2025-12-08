@@ -1,5 +1,6 @@
 import { query } from "@/lib/db"
 import { type NextRequest, NextResponse } from "next/server"
+import { broadcastEvent } from "@/lib/websocket-broadcast"
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,10 +58,29 @@ export async function POST(req: NextRequest) {
       [user_id, inmueble_id, type, description, visit_date || null, offer_amount || null],
     )
 
+    const insertId = (result as any).insertId
+
+    const entryDetails = await query(
+      `SELECT b.*, i.title as property_title, u.name as user_name
+       FROM bitacora b
+       JOIN inmueble i ON b.inmueble_id = i.id
+       JOIN users u ON b.user_id = u.id
+       WHERE b.id = ?`,
+      [insertId],
+    )
+
+    if (entryDetails && (entryDetails as any[]).length > 0) {
+      await broadcastEvent({
+        type: "bitacora_created",
+        data: (entryDetails as any[])[0],
+      })
+    }
+    // </CHANGE>
+
     return NextResponse.json({
       success: true,
       message: "Bitacora entry created successfully",
-      id: (result as any).insertId,
+      id: insertId,
     })
   } catch (error: any) {
     console.error("[v0] Error creating bitacora entry:", error?.message || error)

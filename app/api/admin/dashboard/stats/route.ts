@@ -29,6 +29,9 @@ export async function GET() {
     `)) as any[]
     const totalMovements = movementsResult[0]?.count || 0
 
+    console.log("[v0] Total movements in bitacora:", totalMovements)
+    // </CHANGE>
+
     const alertsResult = (await query(`
       SELECT 
         i.id,
@@ -127,14 +130,17 @@ export async function GET() {
         u.name as usuario,
         COUNT(b.id) as movimientos
       FROM users u
-      INNER JOIN bitacora b ON u.id = b.user_id
-      WHERE MONTH(b.created_at) = MONTH(CURDATE())
+      LEFT JOIN bitacora b ON u.id = b.user_id 
+        AND MONTH(b.created_at) = MONTH(CURDATE())
         AND YEAR(b.created_at) = YEAR(CURDATE())
       GROUP BY u.id, u.name
       HAVING movimientos > 0
       ORDER BY movimientos DESC
       LIMIT 15
     `)) as any[]
+
+    console.log("[v0] Activity by user result:", activityByUserResult)
+    // </CHANGE>
 
     const totalActiveUsersResult = (await query(`
       SELECT COUNT(DISTINCT b.user_id) as count
@@ -158,7 +164,7 @@ export async function GET() {
       totalSalesUsers,
     })
   } catch (error) {
-    console.error("Error fetching admin dashboard stats:", error)
+    console.error("[v0] Error fetching admin dashboard stats:", error)
     return NextResponse.json({ error: "Error al cargar las estadísticas" }, { status: 500 })
   }
 }
