@@ -35,7 +35,7 @@ export function HeroSection() {
     <section className="relative min-h-screen pt-16 sm:pt-20 pb-8 sm:pb-12 overflow-hidden">
       <div className="absolute inset-0 z-0">
         <video autoPlay muted loop playsInline className="w-full h-full object-cover">
-          <source src="/herohome.mp4" type="video/mp4" />
+          <source src="/herohome.MP4" type="video/mp4" />
           <img
             src="/modern-luxury-real-estate-property-background.jpg"
             alt="Fondo de inmuebles modernos"
