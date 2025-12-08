@@ -49,7 +49,7 @@ TU PROCESO DE ASESORÍA (paso a paso):
    - Área mínima
 
 4. BUSCAR PROPIEDADES
-   Cuando tengas al menos: operación, ubicación y presupuesto, indica que vas a buscar con este formato EXACTO:
+   Cuando tengas al menos: operación, ubicación y presupuesto, usa este formato EXACTO (el usuario NO verá esto):
    
    [BUSCAR_PROPIEDADES]
    operacion: compra o alquiler
@@ -60,21 +60,24 @@ TU PROCESO DE ASESORÍA (paso a paso):
    habitaciones: [número si lo especificó]
    banos: [número si lo especificó]
    [/BUSCAR_PROPIEDADES]
+   
+   DESPUÉS del marcador, escribe un mensaje breve como: "Perfecto, voy a buscar opciones que se ajusten a lo que buscas. Un momento..."
 
-5. DESPUÉS DE MOSTRAR PROPIEDADES
-   - Si se muestran propiedades, di: "Aquí te muestro algunas opciones que encontré. ¿Te interesa alguna para agendar una visita?"
-   - Si no hay propiedades, di: "No encontré propiedades con esos criterios exactos. ¿Quieres que busque con criterios más flexibles?"
+5. DESPUÉS DE QUE SE MUESTREN PROPIEDADES
+   - Pregunta: "¿Te interesa alguna para agendar una visita?"
    - Ofrece contacto directo: "También puedes contactarnos por WhatsApp al +58 (424) 429-1541"
 
 REGLAS DE COMUNICACIÓN:
 - Respuestas MUY cortas (máximo 2 líneas)
 - UNA pregunta a la vez
 - Si el cliente da varios datos juntos, agradece y pide solo lo que falta
-- Usa emojis ocasionalmente: 🏠 🔑 ✨ 👍
+- No uses emojis
 - No preguntes por detalles opcionales a menos que el cliente los mencione
 
 IMPORTANTE:
 - SIEMPRE usa el formato [BUSCAR_PROPIEDADES] cuando tengas suficiente información
+- El marcador [BUSCAR_PROPIEDADES] será removido automáticamente y el usuario NO lo verá
+- Después del marcador, SIEMPRE escribe un mensaje visible para el usuario
 - NO ofrezcas "enviar por WhatsApp", las propiedades se mostrarán automáticamente en el chat
 - Sé breve y directo
 
@@ -156,8 +159,6 @@ INFORMACIÓN DE CONTACTO:
 
                   if (content) {
                     fullResponse += content
-                    const data = JSON.stringify({ type: "text", content })
-                    controller.enqueue(encoder.encode(`${data}\n`))
                   }
                 } catch (e) {
                   console.error("Error parsing SSE:", e)
@@ -168,18 +169,22 @@ INFORMACIÓN DE CONTACTO:
 
           const searchMatch = fullResponse.match(/\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i)
 
+          let textToShow = fullResponse
+          let propertiesToSend: any[] = []
+
           if (searchMatch) {
+            textToShow = fullResponse.replace(/\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi, "").trim()
+
             const searchContent = searchMatch[1]
             const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
-            const ubicacionMatch = searchContent.match(/ubicacion:\s*(.+?)$/im)
+            const ubicacionMatch = searchContent.match(/ubicacion:\s*(.+?)(?:\n|$)/im)
             const precioMinMatch = searchContent.match(/precio_min:\s*(\d+)/i)
             const precioMaxMatch = searchContent.match(/precio_max:\s*(\d+)/i)
-            const tipoMatch = searchContent.match(/tipo:\s*(.+?)$/im)
+            const tipoMatch = searchContent.match(/tipo:\s*(.+?)(?:\n|$)/im)
             const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
             const banosMatch = searchContent.match(/banos:\s*(\d+)/i)
 
             if (operacionMatch && ubicacionMatch) {
-              // Conectar a base de datos y buscar propiedades
               const mysql = require("mysql2/promise")
               const connection = await mysql.createConnection(process.env.DATABASE_URL)
 
@@ -201,16 +206,24 @@ INFORMACIÓN DE CONTACTO:
                 params.push(`%${ubicacion}%`, `%${ubicacion}%`, `%${ubicacion}%`)
 
                 // Filtro de precio
-                if (precioMinMatch && precioMaxMatch) {
-                  const precioMin = Number.parseInt(precioMinMatch[1])
+                if (precioMaxMatch) {
                   const precioMax = Number.parseInt(precioMaxMatch[1])
+                  const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
 
                   if (operacion === "compra") {
-                    query += " AND purchase_price BETWEEN ? AND ?"
-                    params.push(precioMin, precioMax)
+                    query += " AND purchase_price <= ?"
+                    params.push(precioMax)
+                    if (precioMin > 0) {
+                      query += " AND purchase_price >= ?"
+                      params.push(precioMin)
+                    }
                   } else {
-                    query += " AND rental_price BETWEEN ? AND ?"
-                    params.push(precioMin, precioMax)
+                    query += " AND rental_price <= ?"
+                    params.push(precioMax)
+                    if (precioMin > 0) {
+                      query += " AND rental_price >= ?"
+                      params.push(precioMin)
+                    }
                   }
                 }
 
@@ -238,7 +251,7 @@ INFORMACIÓN DE CONTACTO:
                 const [rows] = await connection.execute(query, params)
 
                 if (Array.isArray(rows) && rows.length > 0) {
-                  const properties = rows.map((row: any) => ({
+                  propertiesToSend = rows.map((row: any) => ({
                     id: row.id,
                     title: row.title,
                     location: row.location || `${row.city}, ${row.state}`,
@@ -248,9 +261,6 @@ INFORMACIÓN DE CONTACTO:
                     area: row.area,
                     image_url: row.image_url,
                   }))
-
-                  const propertiesData = JSON.stringify({ type: "properties", properties })
-                  controller.enqueue(encoder.encode(`${propertiesData}\n`))
                 }
 
                 await connection.end()
@@ -258,6 +268,16 @@ INFORMACIÓN DE CONTACTO:
                 console.error("Database error:", dbError)
               }
             }
+          }
+
+          if (textToShow.trim()) {
+            const data = JSON.stringify({ type: "text", content: textToShow })
+            controller.enqueue(encoder.encode(`${data}\n`))
+          }
+
+          if (propertiesToSend.length > 0) {
+            const propertiesData = JSON.stringify({ type: "properties", properties: propertiesToSend })
+            controller.enqueue(encoder.encode(`${propertiesData}\n`))
           }
 
           controller.close()
