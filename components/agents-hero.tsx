@@ -22,30 +22,22 @@ export function AgentsHero() {
       {/* Content container */}
       <div className="relative h-full flex items-center justify-start">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="max-w-2xl space-y-6">
-            {/* Accent badge */}
+          <div className="max-w-2xl space-y-6 sm:space-y-8">
             <div className="inline-block">
-              <span className="text-sm font-semibold text-white/80 uppercase tracking-widest bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
-                Nuestro Equipo de Expertos
+              <span className="text-xs sm:text-sm font-semibold text-white/80 uppercase tracking-widest bg-white/10 backdrop-blur-md px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20">
+                Nuestro Equipo
               </span>
             </div>
 
-            {/* Main heading */}
-            <h1 className="text-6xl md:text-7xl lg:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
               Expertos en
               <br />
-              inmobiliaria de lujo
+              lujo
             </h1>
-
-            {/* Subheading */}
-            <p className="text-lg md:text-xl text-white/90 max-w-xl font-light leading-relaxed drop-shadow">
-              Nuestro equipo de profesionales certificados está comprometido con brindarte el mejor servicio en tu
-              búsqueda inmobiliaria. Experiencia, dedicación y resultados excepcionales.
-            </p>
 
             {/* CTA Button */}
             <div className="pt-4">
-              <button className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold px-8 py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg">
+              <button className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg text-sm sm:text-base">
                 Conocer Nuestro Equipo
               </button>
             </div>

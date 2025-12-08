@@ -17,32 +17,24 @@ export function BlogHero() {
       {/* Content container */}
       <div className="relative h-full flex items-center justify-start">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="max-w-2xl space-y-4 sm:space-y-6">
-            {/* Accent badge */}
+          <div className="max-w-2xl space-y-6 sm:space-y-8">
             <div className="inline-block">
-              <span className="text-xs sm:text-sm font-semibold text-white/80 uppercase tracking-wide sm:tracking-widest bg-white/10 backdrop-blur-md px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/20 leading-tight">
-                Centro de Conocimiento Inmobiliario
+              <span className="text-xs sm:text-sm font-semibold text-white/80 uppercase tracking-widest bg-white/10 backdrop-blur-md px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20">
+                Blog
               </span>
             </div>
 
-            {/* Main heading */}
-            <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
+            <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
               Guías y
               <br />
-              consejos inmobiliarios
+              consejos
             </h1>
 
-            {/* Subheading */}
-            <p className="text-base sm:text-lg md:text-xl text-white/90 max-w-xl font-light leading-relaxed drop-shadow">
-              Aprende de expertos inmobiliarios sobre inversión, mercado y estrategias para maximizar tus oportunidades
-              en el sector. Información actualizada y práctica para tomar mejores decisiones.
-            </p>
-
             {/* CTA Button */}
-            <div className="pt-2 sm:pt-4">
+            <div className="pt-4">
               <a
                 href="#blog-posts"
-                className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold px-6 py-3 sm:px-8 sm:py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg text-sm sm:text-base"
+                className="inline-block bg-primary hover:bg-primary/90 text-white font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg text-sm sm:text-base"
               >
                 Explorar Artículos
               </a>
