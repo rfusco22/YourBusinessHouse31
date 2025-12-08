@@ -106,6 +106,16 @@ export async function GET(request: Request) {
         userIdNum,
       ])) as any[]
 
+      console.log("[v0] User properties from DB:", properties.length)
+      if (properties.length > 0) {
+        console.log("[v0] Sample user property:", {
+          id: properties[0].id,
+          title: properties[0].title,
+          status: properties[0].status,
+          operation_type: properties[0].operation_type,
+        })
+      }
+
       const mappedProperties = await Promise.all(
         properties.map(async (p: any) => {
           const imagesResult = (await query(
@@ -130,6 +140,7 @@ export async function GET(request: Request) {
             image_url: imagesResult.length > 0 ? imagesResult[0].image_url : p.image_url || null,
             type: p.type,
             operation_type: p.operation_type || "compra",
+            status: p.status || "disponible",
             latitude: p.latitude || null,
             longitude: p.longitude || null,
           }
@@ -137,6 +148,10 @@ export async function GET(request: Request) {
       )
 
       console.log("[v0] Properties loaded for user:", mappedProperties.length)
+      console.log(
+        "[v0] Mapped properties statuses:",
+        mappedProperties.map((p) => ({ id: p.id, status: p.status })),
+      )
       return NextResponse.json({ success: true, data: mappedProperties })
     }
 
