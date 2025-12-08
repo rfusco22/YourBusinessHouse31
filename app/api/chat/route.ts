@@ -13,7 +13,6 @@ export async function POST(request: Request) {
       throw new Error("Messages array is required")
     }
 
-    // Verificar que tengamos API key de OpenAI
     const apiKey = process.env.OPENAI_API_KEY
 
     if (!apiKey) {
@@ -41,14 +40,13 @@ tipo: tipo de inmueble
 habitaciones: numero
 [/BUSCAR_PROPIEDADES]
 
-Perfecto, voy a buscar opciones que se ajusten a lo que buscas.
+DESPUÉS del bloque [/BUSCAR_PROPIEDADES], di solo: "Espérame un momento mientras busco las mejores opciones para ti."
 
 REGLAS:
 - Respuestas MUY cortas (máximo 2 líneas)
 - UNA pregunta a la vez
-- NO menciones WhatsApp ni "enviar información"
+- NO menciones WhatsApp
 - Las propiedades se mostrarán automáticamente en el chat
-- Después de [/BUSCAR_PROPIEDADES], escribe: "Perfecto, voy a buscar opciones que se ajusten a lo que buscas."
 
 WhatsApp: +58 (424) 429-1541`
 
@@ -115,8 +113,11 @@ WhatsApp: +58 (424) 429-1541`
 
                   if (content) {
                     fullResponse += content
-                    const data = JSON.stringify({ type: "text", content: content })
-                    controller.enqueue(encoder.encode(`${data}\n`))
+                    const cleanContent = content.replace(/\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi, "")
+                    if (cleanContent.trim()) {
+                      const data = JSON.stringify({ type: "text", content: cleanContent })
+                      controller.enqueue(encoder.encode(`${data}\n`))
+                    }
                   }
                 } catch (e) {
                   // Skip parsing errors
@@ -125,13 +126,14 @@ WhatsApp: +58 (424) 429-1541`
             }
           }
 
-          console.log("[v0] Full response:", fullResponse)
+          console.log("[v0] Full AI response:", fullResponse)
 
           const searchMatch = fullResponse.match(/\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i)
 
           if (searchMatch) {
             console.log("[v0] Property search marker detected!")
             const searchContent = searchMatch[1]
+            console.log("[v0] Search content:", searchContent)
 
             const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
             const ubicacionMatch = searchContent.match(/ubicacion:\s*([^\n]+)/i)
@@ -143,14 +145,22 @@ WhatsApp: +58 (424) 429-1541`
             console.log("[v0] Extracted params:", {
               operacion: operacionMatch?.[1],
               ubicacion: ubicacionMatch?.[1],
+              precioMin: precioMinMatch?.[1],
               precioMax: precioMaxMatch?.[1],
+              tipo: tipoMatch?.[1],
+              habitaciones: habitacionesMatch?.[1],
             })
 
             if (operacionMatch && ubicacionMatch && precioMaxMatch) {
+              console.log("[v0] All required params present, searching database...")
+              console.log("[v0] DATABASE_URL present:", !!process.env.DATABASE_URL)
+
               const mysql = require("mysql2/promise")
-              const connection = await mysql.createConnection(process.env.DATABASE_URL)
 
               try {
+                const connection = await mysql.createConnection(process.env.DATABASE_URL)
+                console.log("[v0] Database connection established")
+
                 let query = "SELECT * FROM properties WHERE 1=1"
                 const params: any[] = []
 
@@ -195,15 +205,18 @@ WhatsApp: +58 (424) 429-1541`
                   params.push(Number.parseInt(habitacionesMatch[1]))
                 }
 
-                query += " LIMIT 5"
+                query += " LIMIT 10"
 
-                console.log("[v0] Executing query:", query)
+                console.log("[v0] Executing SQL query:", query)
                 console.log("[v0] With params:", params)
 
                 const [rows] = await connection.execute(query, params)
 
+                console.log("[v0] Query executed. Rows found:", Array.isArray(rows) ? rows.length : 0)
+
                 if (Array.isArray(rows) && rows.length > 0) {
                   console.log("[v0] Found", rows.length, "properties")
+                  console.log("[v0] First property:", rows[0])
 
                   const propertiesToSend = rows.map((row: any) => ({
                     id: row.id,
@@ -216,36 +229,45 @@ WhatsApp: +58 (424) 429-1541`
                     image_url: row.image_url,
                   }))
 
+                  console.log("[v0] Sending properties to frontend:", propertiesToSend.length)
+
                   const propertiesData = JSON.stringify({
                     type: "properties",
                     properties: propertiesToSend,
                   })
                   controller.enqueue(encoder.encode(`${propertiesData}\n`))
 
-                  console.log("[v0] Properties sent to frontend")
+                  console.log("[v0] Properties data sent successfully")
                 } else {
                   console.log("[v0] No properties found matching criteria")
 
                   const noResultsMsg = JSON.stringify({
                     type: "text",
-                    content:
-                      "\n\nNo encontré propiedades que coincidan exactamente con tu búsqueda. ¿Quieres ajustar algún criterio?",
+                    content: "\n\nNo encontré propiedades que coincidan exactamente. ¿Quieres ajustar algún criterio?",
                   })
                   controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
                 }
 
                 await connection.end()
+                console.log("[v0] Database connection closed")
               } catch (dbError) {
                 console.error("[v0] Database error:", dbError)
+                const errorMsg = JSON.stringify({
+                  type: "text",
+                  content: "\n\nTuve un problema al buscar en la base de datos. Intenta de nuevo.",
+                })
+                controller.enqueue(encoder.encode(`${errorMsg}\n`))
               }
             } else {
               console.log("[v0] Missing required search parameters")
             }
+          } else {
+            console.log("[v0] No property search marker found in response")
           }
 
           controller.close()
         } catch (error) {
-          console.error("Stream error:", error)
+          console.error("[v0] Stream error:", error)
           const errorData = JSON.stringify({
             type: "text",
             content: "Disculpa, tuve un problema. ¿Podrías intentarlo de nuevo?",
