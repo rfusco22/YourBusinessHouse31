@@ -1,13 +1,8 @@
-"use client"
-
 import Link from "next/link"
 import { MapPin, Phone, Mail, Facebook, Instagram, Twitter, MessageCircle } from "lucide-react"
 import Image from "next/image"
-import { useTheme } from "next-themes"
 
 export function Footer() {
-  const { theme } = useTheme()
-
   return (
     <footer className="bg-black text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -16,13 +11,12 @@ export function Footer() {
           <div className="md:col-span-1">
             <Link href="/" className="flex flex-col items-start gap-2 w-fit">
               <Image
-                src="/logo-dark.jpeg"
+                src="/logo-dark.png"
                 alt="Your Business House Logo Icon"
                 width={80}
                 height={80}
                 className="h-12 w-auto flex-shrink-0"
               />
-              {/* </CHANGE> */}
               <div className="flex flex-col gap-0">
                 <span className="text-sm font-bold tracking-wide" style={{ color: "#a27622" }}>
                   YOUR BUSINESS HOUSE
