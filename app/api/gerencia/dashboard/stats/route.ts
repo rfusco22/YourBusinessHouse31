@@ -124,6 +124,38 @@ export async function GET() {
     `)) as any[]
     const totalActiveUsers = totalActiveUsersResult[0]?.count || 0
 
+    const salesByUserResult = (await query(`
+      SELECT 
+        u.name as usuario,
+        SUM(CASE WHEN i.status = 'vendido' THEN 1 ELSE 0 END) as vendidas,
+        SUM(CASE WHEN i.status = 'alquilado' THEN 1 ELSE 0 END) as alquiladas,
+        COUNT(i.id) as total
+      FROM users u
+      LEFT JOIN inmueble i ON u.id = i.owner_id 
+        AND (i.status = 'vendido' OR i.status = 'alquilado')
+        AND MONTH(i.updated_at) = MONTH(CURDATE())
+        AND YEAR(i.updated_at) = YEAR(CURDATE())
+      WHERE u.role = 'asesor'
+      GROUP BY u.id, u.name
+      HAVING total > 0
+      ORDER BY total DESC
+      LIMIT 15
+    `)) as any[]
+
+    const totalSalesUsersResult = (await query(`
+      SELECT COUNT(DISTINCT i.owner_id) as count
+      FROM inmueble i
+      INNER JOIN users u ON i.owner_id = u.id
+      WHERE (i.status = 'vendido' OR i.status = 'alquilado')
+        AND u.role = 'asesor'
+        AND MONTH(i.updated_at) = MONTH(CURDATE())
+        AND YEAR(i.updated_at) = YEAR(CURDATE())
+    `)) as any[]
+    const totalSalesUsers = totalSalesUsersResult[0]?.count || 0
+
+    console.log("[v0] Gerencia - Sales by user result:", salesByUserResult)
+    // </CHANGE>
+
     return NextResponse.json({
       totalUsers,
       totalProperties,
@@ -133,6 +165,9 @@ export async function GET() {
       recentActivity,
       activityByUser: activityByUserResult,
       totalActiveUsers,
+      salesByUser: salesByUserResult,
+      totalSalesUsers,
+      // </CHANGE>
     })
   } catch (error) {
     console.error("[v0] Error fetching gerencia dashboard stats:", error)

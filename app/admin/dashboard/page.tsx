@@ -31,7 +31,8 @@ export default function AdminDashboard() {
 
   const [alerts, setAlerts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
-  const [activityByUser, setActivityByUser] = useState([])
+  const [salesByUser, setSalesByUser] = useState([])
+  const [totalSalesUsers, setTotalSalesUsers] = useState(0)
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user")
@@ -47,7 +48,8 @@ export default function AdminDashboard() {
     if (stats) {
       setAlerts(stats.alerts || [])
       setRecentActivity(stats.recentActivity || [])
-      setActivityByUser(stats.activityByUser || [])
+      setSalesByUser(stats.salesByUser || [])
+      setTotalSalesUsers(stats.totalSalesUsers || 0)
     }
   }, [stats])
 
@@ -291,36 +293,42 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 sm:p-6 hover:border-purple-500/50 transition-all duration-300 overflow-x-auto">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base sm:text-lg font-bold text-white">Movimientos por Usuario</h2>
+          <div className="bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/30 rounded-lg p-3 sm:p-6 hover:border-primary/50 transition-all duration-300 overflow-x-auto">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-white">Ranking de Asesores del Mes</h2>
+              {totalSalesUsers > 15 && (
+                <span className="text-primary text-xs sm:text-sm">Mostrando top 15 de {totalSalesUsers} asesores</span>
+              )}
             </div>
-            <p className="text-gray-400 text-xs sm:text-sm mb-4 sm:mb-6">Usuarios más activos del sistema</p>
+            <p className="text-gray-400 text-xs sm:text-sm mb-4 sm:mb-6">
+              Asesores que más vendieron y alquilaron este mes
+            </p>
             {dataLoading ? (
               <div className="h-96 flex items-center justify-center text-gray-400 text-sm">Cargando datos...</div>
-            ) : activityByUser.length > 0 ? (
+            ) : salesByUser.length > 0 ? (
               <div className="w-full" style={{ minWidth: "min(100%, 600px)" }}>
                 <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={activityByUser} layout="vertical">
+                  <BarChart data={salesByUser} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                     <XAxis type="number" stroke="#999" />
                     <YAxis dataKey="usuario" type="category" stroke="#999" width={100} tick={{ fontSize: 12 }} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#1a1a1a",
-                        border: "1px solid #9333ea",
+                        border: "1px solid #B8860B",
                         borderRadius: "8px",
                       }}
-                      cursor={{ fill: "rgba(147, 51, 234, 0.1)" }}
+                      cursor={{ fill: "rgba(184, 134, 11, 0.1)" }}
                     />
                     <Legend />
-                    <Bar dataKey="movimientos" fill="#9333ea" radius={[0, 8, 8, 0]} />
+                    <Bar dataKey="vendidas" fill="#B8860B" radius={[0, 8, 8, 0]} name="Vendidas" />
+                    <Bar dataKey="alquiladas" fill="#9333ea" radius={[0, 8, 8, 0]} name="Alquiladas" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className="h-96 flex items-center justify-center text-gray-400 text-sm">
-                No hay datos de actividad disponibles
+                No hay ventas o alquileres registrados este mes
               </div>
             )}
           </div>

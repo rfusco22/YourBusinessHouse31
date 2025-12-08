@@ -34,8 +34,8 @@ export default function GerenciaDashboard() {
   })
   const [alerts, setAlerts] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
-  const [activityByUser, setActivityByUser] = useState([])
-  const [totalActiveUsers, setTotalActiveUsers] = useState(0)
+  const [salesByUser, setSalesByUser] = useState([])
+  const [totalSalesUsers, setTotalSalesUsers] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
@@ -65,8 +65,8 @@ export default function GerenciaDashboard() {
         })
         setAlerts(data.alerts || [])
         setRecentActivity(data.recentActivity || [])
-        setActivityByUser(data.activityByUser || [])
-        setTotalActiveUsers(data.totalActiveUsers || 0)
+        setSalesByUser(data.salesByUser || [])
+        setTotalSalesUsers(data.totalSalesUsers || 0)
       } catch (error) {
         console.error("Error loading dashboard data:", error)
       } finally {
@@ -374,28 +374,28 @@ export default function GerenciaDashboard() {
             </div>
           </div>
 
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 md:p-6 hover:border-purple-500/50 transition-all duration-300">
+          <div className="bg-gradient-to-br from-primary/10 to-purple-500/10 border border-primary/30 rounded-lg p-4 md:p-6 hover:border-primary/50 transition-all duration-300">
             <div className="flex items-center justify-between mb-2 md:mb-4 flex-wrap gap-2">
               <h2 className={cn("font-bold text-white", isMobile ? "text-base" : "text-lg")}>
-                Movimientos por Usuario
+                Ranking de Asesores del Mes
               </h2>
-              {totalActiveUsers > 15 && (
-                <span className={cn("text-purple-400", isMobile ? "text-xs" : "text-sm")}>
-                  Mostrando top 15 de {totalActiveUsers} usuarios activos
+              {totalSalesUsers > 15 && (
+                <span className={cn("text-primary", isMobile ? "text-xs" : "text-sm")}>
+                  Mostrando top 15 de {totalSalesUsers} asesores
                 </span>
               )}
             </div>
             <p className={cn("text-gray-400 mb-4 md:mb-6", isMobile ? "text-xs" : "text-sm")}>
-              Usuarios más activos del sistema
+              Asesores que más vendieron y alquilaron este mes
             </p>
             {dataLoading ? (
               <div className={cn("flex items-center justify-center text-gray-400", isMobile ? "h-64" : "h-96")}>
                 Cargando datos...
               </div>
-            ) : activityByUser.length > 0 ? (
+            ) : salesByUser.length > 0 ? (
               <div className="w-full overflow-x-auto">
                 <ResponsiveContainer width="100%" height={isMobile ? 300 : 500} minWidth={280}>
-                  <BarChart data={activityByUser} layout="vertical">
+                  <BarChart data={salesByUser} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                     <XAxis type="number" stroke="#999" />
                     <YAxis
@@ -408,19 +408,20 @@ export default function GerenciaDashboard() {
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#1a1a1a",
-                        border: "1px solid #9333ea",
+                        border: "1px solid #B8860B",
                         borderRadius: "8px",
                       }}
-                      cursor={{ fill: "rgba(147, 51, 234, 0.1)" }}
+                      cursor={{ fill: "rgba(184, 134, 11, 0.1)" }}
                     />
                     <Legend />
-                    <Bar dataKey="movimientos" fill="#9333ea" radius={[0, 8, 8, 0]} />
+                    <Bar dataKey="vendidas" fill="#B8860B" radius={[0, 8, 8, 0]} name="Vendidas" />
+                    <Bar dataKey="alquiladas" fill="#9333ea" radius={[0, 8, 8, 0]} name="Alquiladas" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             ) : (
               <div className={cn("flex items-center justify-center text-gray-400", isMobile ? "h-64" : "h-96")}>
-                No hay datos de actividad disponibles
+                No hay ventas o alquileres registrados este mes
               </div>
             )}
           </div>
