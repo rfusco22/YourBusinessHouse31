@@ -22,78 +22,36 @@ export async function POST(request: Request) {
       )
     }
 
-    const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional, amigable y experto de Your Business House en Venezuela. Tu misión es ayudar a los clientes a encontrar su hogar ideal de manera eficiente y personalizada.
+    const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional de Your Business House en Venezuela.
 
-PERSONALIDAD:
-- Profesional pero cercano, como un asesor venezolano experimentado
-- Empático y atento a las necesidades del cliente
-- Eficiente: haces preguntas claras y directas
-- Entusiasta sobre las propiedades que ofreces
+PROCESO:
+1. Pregunta: "¿Estás buscando comprar o alquilar?"
+2. Pregunta por ubicación: "¿En qué ciudad o zona de Venezuela?"
+3. Pregunta por presupuesto: "¿Cuál es tu presupuesto aproximado?"
+4. Pregunta por tipo (si no lo mencionó): "¿Qué tipo de inmueble buscas? (casa, apartamento, local, terreno)"
 
-TU PROCESO DE ASESORÍA (paso a paso):
+Cuando tengas: operación, ubicación y presupuesto, usa EXACTAMENTE este formato:
 
-1. SALUDO INICIAL
-   - Saluda cordialmente
-   - Pregunta: "¿Estás buscando comprar o alquilar?"
+[BUSCAR_PROPIEDADES]
+operacion: compra o alquiler
+ubicacion: ciudad o zona
+precio_min: numero
+precio_max: numero
+tipo: tipo de inmueble
+habitaciones: numero
+[/BUSCAR_PROPIEDADES]
 
-2. RECOPILAR INFORMACIÓN ESENCIAL
-   Haz UNA pregunta a la vez en este orden:
-   a) Tipo de operación: comprar o alquilar
-   b) Ubicación: ¿En qué ciudad o zona de Venezuela?
-   c) Presupuesto: ¿Cuál es tu presupuesto aproximado?
-   d) Tipo de inmueble: ¿Casa, apartamento, local comercial, terreno?
+Perfecto, voy a buscar opciones que se ajusten a lo que buscas.
 
-3. DETALLES OPCIONALES (solo si el cliente lo menciona)
-   - Número de habitaciones
-   - Número de baños
-   - Área mínima
-
-4. BUSCAR PROPIEDADES
-   Cuando tengas al menos: operación, ubicación y presupuesto, usa este formato EXACTO (el usuario NO verá esto):
-   
-   [BUSCAR_PROPIEDADES]
-   operacion: compra o alquiler
-   ubicacion: [ciudad o zona]
-   precio_min: [número]
-   precio_max: [número]
-   tipo: [tipo de inmueble si lo especificó]
-   habitaciones: [número si lo especificó]
-   banos: [número si lo especificó]
-   [/BUSCAR_PROPIEDADES]
-   
-   DESPUÉS del marcador, escribe un mensaje breve como: "Perfecto, voy a buscar opciones que se ajusten a lo que buscas. Un momento..."
-
-5. DESPUÉS DE QUE SE MUESTREN PROPIEDADES
-   - Pregunta: "¿Te interesa alguna para agendar una visita?"
-   - Ofrece contacto directo: "También puedes contactarnos por WhatsApp al +58 (424) 429-1541"
-
-REGLAS DE COMUNICACIÓN:
+REGLAS:
 - Respuestas MUY cortas (máximo 2 líneas)
 - UNA pregunta a la vez
-- Si el cliente da varios datos juntos, agradece y pide solo lo que falta
-- No uses emojis
-- No preguntes por detalles opcionales a menos que el cliente los mencione
+- NO menciones WhatsApp ni "enviar información"
+- Las propiedades se mostrarán automáticamente en el chat
+- Después de [/BUSCAR_PROPIEDADES], escribe: "Perfecto, voy a buscar opciones que se ajusten a lo que buscas."
 
-IMPORTANTE:
-- SIEMPRE usa el formato [BUSCAR_PROPIEDADES] cuando tengas suficiente información
-- El marcador [BUSCAR_PROPIEDADES] será removido automáticamente y el usuario NO lo verá
-- Después del marcador, SIEMPRE escribe un mensaje visible para el usuario
-- NO ofrezcas "enviar por WhatsApp", las propiedades se mostrarán automáticamente en el chat
-- Sé breve y directo
+WhatsApp: +58 (424) 429-1541`
 
-INFORMACIÓN DE CONTACTO:
-- WhatsApp: +58 (424) 429-1541
-- Ubicación: CC El Añil, Valencia, Estado Carabobo, Venezuela
-- Instagram: @yourbusinesshouse`
-
-    const lastMessage = messages[messages.length - 1]?.content || ""
-    const allMessages = messages.map((m: any) => m.content).join(" ")
-
-    const propertiesToSend: any[] = []
-    const shouldSearchProperties = false
-    const searchParams: any = {}
-
-    // Preparar mensajes para OpenAI
     const formattedMessages: Message[] = [
       { role: "system", content: systemMessage },
       ...messages.map((m: any) => ({
@@ -102,7 +60,6 @@ INFORMACIÓN DE CONTACTO:
       })),
     ]
 
-    // Llamar a la API de OpenAI directamente
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -124,7 +81,6 @@ INFORMACIÓN DE CONTACTO:
       throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`)
     }
 
-    // Crear stream de respuesta
     const encoder = new TextEncoder()
     const decoder = new TextDecoder()
 
@@ -163,34 +119,34 @@ INFORMACIÓN DE CONTACTO:
                     controller.enqueue(encoder.encode(`${data}\n`))
                   }
                 } catch (e) {
-                  console.error("Error parsing SSE:", e)
+                  // Skip parsing errors
                 }
               }
             }
           }
 
-          console.log("[v0] Full response received, checking for property search")
+          console.log("[v0] Full response:", fullResponse)
+
           const searchMatch = fullResponse.match(/\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i)
 
           if (searchMatch) {
-            console.log("[v0] Property search marker found!")
+            console.log("[v0] Property search marker detected!")
             const searchContent = searchMatch[1]
+
             const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
-            const ubicacionMatch = searchContent.match(/ubicacion:\s*(.+?)(?:\n|$)/im)
+            const ubicacionMatch = searchContent.match(/ubicacion:\s*([^\n]+)/i)
             const precioMinMatch = searchContent.match(/precio_min:\s*(\d+)/i)
             const precioMaxMatch = searchContent.match(/precio_max:\s*(\d+)/i)
-            const tipoMatch = searchContent.match(/tipo:\s*(.+?)(?:\n|$)/im)
+            const tipoMatch = searchContent.match(/tipo:\s*([^\n]+)/i)
             const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
-            const banosMatch = searchContent.match(/banos:\s*(\d+)/i)
 
-            console.log("[v0] Search params:", {
+            console.log("[v0] Extracted params:", {
               operacion: operacionMatch?.[1],
               ubicacion: ubicacionMatch?.[1],
-              precioMin: precioMinMatch?.[1],
               precioMax: precioMaxMatch?.[1],
             })
 
-            if (operacionMatch && ubicacionMatch) {
+            if (operacionMatch && ubicacionMatch && precioMaxMatch) {
               const mysql = require("mysql2/promise")
               const connection = await mysql.createConnection(process.env.DATABASE_URL)
 
@@ -198,7 +154,6 @@ INFORMACIÓN DE CONTACTO:
                 let query = "SELECT * FROM properties WHERE 1=1"
                 const params: any[] = []
 
-                // Filtro de operación
                 const operacion = operacionMatch[1].toLowerCase()
                 if (operacion === "compra") {
                   query += " AND (operation_type = 'compra' OR operation_type = 'ambos')"
@@ -206,59 +161,50 @@ INFORMACIÓN DE CONTACTO:
                   query += " AND (operation_type = 'alquiler' OR operation_type = 'ambos')"
                 }
 
-                // Filtro de ubicación
                 const ubicacion = ubicacionMatch[1].trim()
                 query += " AND (city LIKE ? OR address LIKE ? OR location LIKE ?)"
                 params.push(`%${ubicacion}%`, `%${ubicacion}%`, `%${ubicacion}%`)
 
-                // Filtro de precio
-                if (precioMaxMatch) {
-                  const precioMax = Number.parseInt(precioMaxMatch[1])
-                  const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
+                const precioMax = Number.parseInt(precioMaxMatch[1])
+                const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
 
-                  if (operacion === "compra") {
-                    query += " AND purchase_price <= ?"
-                    params.push(precioMax)
-                    if (precioMin > 0) {
-                      query += " AND purchase_price >= ?"
-                      params.push(precioMin)
-                    }
-                  } else {
-                    query += " AND rental_price <= ?"
-                    params.push(precioMax)
-                    if (precioMin > 0) {
-                      query += " AND rental_price >= ?"
-                      params.push(precioMin)
-                    }
+                if (operacion === "compra") {
+                  query += " AND purchase_price <= ?"
+                  params.push(precioMax)
+                  if (precioMin > 0) {
+                    query += " AND purchase_price >= ?"
+                    params.push(precioMin)
+                  }
+                } else {
+                  query += " AND rental_price <= ?"
+                  params.push(precioMax)
+                  if (precioMin > 0) {
+                    query += " AND rental_price >= ?"
+                    params.push(precioMin)
                   }
                 }
 
-                // Filtro de tipo
                 if (tipoMatch) {
                   const tipo = tipoMatch[1].trim()
                   query += " AND property_type LIKE ?"
                   params.push(`%${tipo}%`)
                 }
 
-                // Filtro de habitaciones
                 if (habitacionesMatch) {
                   query += " AND bedrooms >= ?"
                   params.push(Number.parseInt(habitacionesMatch[1]))
                 }
 
-                // Filtro de baños
-                if (banosMatch) {
-                  query += " AND bathrooms >= ?"
-                  params.push(Number.parseInt(banosMatch[1]))
-                }
-
                 query += " LIMIT 5"
 
-                console.log("[v0] Executing query:", query, params)
+                console.log("[v0] Executing query:", query)
+                console.log("[v0] With params:", params)
+
                 const [rows] = await connection.execute(query, params)
 
                 if (Array.isArray(rows) && rows.length > 0) {
-                  console.log("[v0] Found properties:", rows.length)
+                  console.log("[v0] Found", rows.length, "properties")
+
                   const propertiesToSend = rows.map((row: any) => ({
                     id: row.id,
                     title: row.title,
@@ -270,16 +216,30 @@ INFORMACIÓN DE CONTACTO:
                     image_url: row.image_url,
                   }))
 
-                  const propertiesData = JSON.stringify({ type: "properties", properties: propertiesToSend })
+                  const propertiesData = JSON.stringify({
+                    type: "properties",
+                    properties: propertiesToSend,
+                  })
                   controller.enqueue(encoder.encode(`${propertiesData}\n`))
+
+                  console.log("[v0] Properties sent to frontend")
                 } else {
-                  console.log("[v0] No properties found")
+                  console.log("[v0] No properties found matching criteria")
+
+                  const noResultsMsg = JSON.stringify({
+                    type: "text",
+                    content:
+                      "\n\nNo encontré propiedades que coincidan exactamente con tu búsqueda. ¿Quieres ajustar algún criterio?",
+                  })
+                  controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
                 }
 
                 await connection.end()
               } catch (dbError) {
                 console.error("[v0] Database error:", dbError)
               }
+            } else {
+              console.log("[v0] Missing required search parameters")
             }
           }
 

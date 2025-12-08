@@ -69,7 +69,6 @@ export function AIChatbot() {
 
     try {
       console.log("[v0] Sending message to API:", userMessage)
-      console.log("[v0] Current messages count:", messages.length)
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -82,14 +81,9 @@ export function AIChatbot() {
         }),
       })
 
-      const contentType = response.headers.get("content-type")
-      console.log("[v0] Response content-type:", contentType)
       console.log("[v0] Response status:", response.status)
 
       if (!response.ok) {
-        console.error("[v0] Response not OK, status:", response.status)
-        const errorText = await response.text()
-        console.error("[v0] Error response body:", errorText)
         throw new Error(`Error del servidor (${response.status})`)
       }
 
@@ -100,7 +94,6 @@ export function AIChatbot() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let accumulatedContent = ""
-      let chunksReceived = 0
 
       const assistantMessageId = `assistant-${Date.now()}`
       setMessages((prev) => [
@@ -115,63 +108,42 @@ export function AIChatbot() {
       while (true) {
         const { done, value } = await reader.read()
         if (done) {
-          console.log("[v0] Stream finished, total chunks:", chunksReceived)
+          console.log("[v0] Stream finished")
           break
         }
 
-        chunksReceived++
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split("\n")
+        const lines = chunk.split("\n").filter((line) => line.trim())
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === "data: [DONE]") continue
-
           try {
-            let jsonLine = line.trim()
-            if (jsonLine.startsWith("data: ")) {
-              jsonLine = jsonLine.substring(6)
-            }
-
-            if (!jsonLine || jsonLine === "[DONE]") continue
-
-            const parsed = JSON.parse(jsonLine)
+            const parsed = JSON.parse(line)
 
             if (parsed.type === "text" && parsed.content) {
-              accumulatedContent += parsed.content
-              setMessages((prev) =>
-                prev.map((msg) => (msg.id === assistantMessageId ? { ...msg, content: accumulatedContent } : msg)),
+              const cleanContent = parsed.content.replace(
+                /\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi,
+                "",
               )
+
+              if (cleanContent.trim()) {
+                accumulatedContent += cleanContent
+                setMessages((prev) =>
+                  prev.map((msg) => (msg.id === assistantMessageId ? { ...msg, content: accumulatedContent } : msg)),
+                )
+              }
             } else if (parsed.type === "properties" && Array.isArray(parsed.properties)) {
               console.log("[v0] Received properties:", parsed.properties.length)
               setProperties(parsed.properties)
             }
           } catch (e) {
-            // Skip unparseable lines silently
+            // Skip unparseable lines
           }
         }
-      }
-
-      console.log("[v0] Final accumulated content length:", accumulatedContent.length)
-
-      if (!accumulatedContent.trim()) {
-        console.error("[v0] No content received from AI")
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessageId
-              ? {
-                  ...msg,
-                  content: "Lo siento, no pude generar una respuesta. Por favor intenta de nuevo.",
-                }
-              : msg,
-          ),
-        )
       }
 
       setIsLoading(false)
     } catch (error) {
       console.error("[v0] Error sending message:", error)
-      const errorMessage = error instanceof Error ? error.message : "Error desconocido"
-      console.error("[v0] Error details:", errorMessage)
 
       setMessages((prev) => [
         ...prev,
