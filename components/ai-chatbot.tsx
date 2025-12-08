@@ -301,8 +301,7 @@ export function AIChatbot() {
                 {properties.map((property: any) => (
                   <div
                     key={property.id}
-                    className="bg-card rounded-lg p-2 cursor-pointer hover:bg-accent/10 transition-colors border border-border/50"
-                    onClick={() => handlePropertyClick(property.id)}
+                    className="bg-card rounded-lg p-2 border border-border/50 shadow-sm hover:shadow-md transition-shadow"
                   >
                     {property.image_url && (
                       <div className="relative w-full h-20 sm:h-24 mb-2 rounded overflow-hidden">
@@ -318,9 +317,18 @@ export function AIChatbot() {
                     <p className="font-semibold text-xs sm:text-sm mb-1 line-clamp-2">{property.title}</p>
                     <p className="text-xs text-muted-foreground line-clamp-1">{property.location}</p>
                     <p className="text-sm sm:text-base font-bold text-primary mt-1">${property.price}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground mb-2">
                       {property.bedrooms} hab • {property.bathrooms} baños • {property.area}m²
                     </p>
+
+                    <Button
+                      onClick={() => handlePropertyClick(property.id)}
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs bg-primary/5 hover:bg-primary/10 border-primary/20"
+                    >
+                      Ver detalles
+                    </Button>
                   </div>
                 ))}
 
