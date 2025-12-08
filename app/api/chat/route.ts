@@ -1,3 +1,16 @@
+import {
+  convertToModelMessages,
+  type InferUITools,
+  stepCountIs,
+  streamText,
+  tool,
+  type UIDataTypes,
+  type UIMessage,
+  validateUIMessages,
+} from "ai"
+import { z } from "zod"
+import mysql from "mysql2/promise"
+
 export const maxDuration = 60
 
 interface Message {
@@ -5,293 +18,166 @@ interface Message {
   content: string
 }
 
-export async function POST(request: Request) {
+const searchPropertiesTool = tool({
+  description:
+    "Busca propiedades inmobiliarias en Venezuela cuando el usuario especifica operación (alquiler/compra), ubicación y presupuesto",
+  inputSchema: z.object({
+    operacion: z.enum(["alquiler", "compra"]).describe("Tipo de operación: alquiler o compra"),
+    ubicacion: z.string().describe("Ciudad o zona donde buscar (ej: 'Prebo Valencia', 'Caracas', 'Maracaibo')"),
+    precio_min: z.number().optional().describe("Precio mínimo en USD"),
+    precio_max: z.number().describe("Precio máximo en USD"),
+    tipo: z.string().optional().describe("Tipo de inmueble: apartamento, casa, local, terreno"),
+    habitaciones: z.number().optional().describe("Número mínimo de habitaciones"),
+  }),
+  async *execute({ operacion, ubicacion, precio_min, precio_max, tipo, habitaciones }) {
+    yield { state: "loading" as const }
+
+    try {
+      const connection = await mysql.createConnection(process.env.DATABASE_URL!)
+
+      let query = `
+        SELECT i.*, 
+               (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id LIMIT 1) as image_url
+        FROM inmueble i 
+        WHERE i.status = 'disponible'
+      `
+      const params: any[] = []
+
+      // Filtro por operación
+      if (operacion === "compra") {
+        query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
+      } else if (operacion === "alquiler") {
+        query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
+      }
+
+      // Filtro por ubicación
+      query += " AND i.location LIKE ?"
+      params.push(`%${ubicacion}%`)
+
+      // Filtro por precio
+      if (operacion === "compra") {
+        query += " AND i.purchase_price IS NOT NULL AND i.purchase_price <= ?"
+        params.push(precio_max)
+        if (precio_min) {
+          query += " AND i.purchase_price >= ?"
+          params.push(precio_min)
+        }
+      } else {
+        query += " AND i.rental_price IS NOT NULL AND i.rental_price <= ?"
+        params.push(precio_max)
+        if (precio_min) {
+          query += " AND i.rental_price >= ?"
+          params.push(precio_min)
+        }
+      }
+
+      // Filtro por tipo
+      if (tipo) {
+        query += " AND LOWER(i.property_type) LIKE ?"
+        params.push(`%${tipo.toLowerCase()}%`)
+      }
+
+      // Filtro por habitaciones
+      if (habitaciones) {
+        query += " AND i.bedrooms >= ?"
+        params.push(habitaciones)
+      }
+
+      query += " LIMIT 10"
+
+      const [rows] = await connection.execute(query, params)
+      await connection.end()
+
+      const properties = Array.isArray(rows)
+        ? rows.map((row: any) => ({
+            id: row.id,
+            title: row.title,
+            location: row.location,
+            price: operacion === "compra" ? row.purchase_price : row.rental_price,
+            bedrooms: row.bedrooms,
+            bathrooms: row.bathrooms,
+            area: row.area,
+            image_url: row.image_url,
+          }))
+        : []
+
+      yield {
+        state: "ready" as const,
+        properties,
+        count: properties.length,
+      }
+    } catch (error) {
+      console.error("Error buscando propiedades:", error)
+      yield {
+        state: "error" as const,
+        error: "No pude buscar en este momento. Intenta de nuevo.",
+      }
+    }
+  },
+})
+
+const tools = {
+  searchProperties: searchPropertiesTool,
+} as const
+
+export type ChatMessage = UIMessage<never, UIDataTypes, InferUITools<typeof tools>>
+
+export async function POST(req: Request) {
   try {
-    const { messages } = await request.json()
+    const body = await req.json()
 
-    if (!messages || !Array.isArray(messages)) {
-      throw new Error("Messages array is required")
-    }
-
-    const apiKey = process.env.OPENAI_API_KEY
-
-    if (!apiKey) {
-      throw new Error(
-        "OPENAI_API_KEY no configurada. Por favor agrega tu API key de OpenAI en las variables de entorno.",
-      )
-    }
-
-    const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional de Your Business House en Venezuela.
-
-PROCESO DE BÚSQUEDA:
-1. Pregunta: "¿Estás buscando comprar o alquilar?"
-2. Pregunta: "¿En qué ciudad o zona de Venezuela?"
-3. Pregunta: "¿Cuál es tu presupuesto aproximado?"
-4. Si no mencionó el tipo: "¿Qué tipo de inmueble? (casa, apartamento, local, terreno)"
-
-Cuando tengas operación + ubicación + presupuesto, DEBES usar este formato EXACTO:
-
-[BUSCAR_PROPIEDADES]
-operacion:alquiler
-ubicacion:prebo valencia
-precio_min:500
-precio_max:1200
-tipo:apartamento
-habitaciones:2
-[/BUSCAR_PROPIEDADES]
-
-Después del marcador, escribe solo: "Buscando opciones..."
-
-REGLAS:
-- Respuestas cortas (máximo 2 líneas)
-- UNA pregunta a la vez
-- NO menciones WhatsApp en tus respuestas
-- Las propiedades se mostrarán automáticamente
-
-WhatsApp contacto: +58 (424) 429-1541`
-
-    const formattedMessages: Message[] = [
-      { role: "system", content: systemMessage },
-      ...messages.map((m: any) => ({
-        role: m.role === "user" ? "user" : "assistant",
-        content: m.content || "",
-      })),
-    ]
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-3.5-turbo",
-        messages: formattedMessages,
-        temperature: 0.7,
-        max_tokens: 500,
-        stream: true,
-      }),
+    const messages = await validateUIMessages<ChatMessage>({
+      messages: body.messages,
+      tools,
     })
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error("OpenAI API error:", errorData)
-      throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`)
-    }
+    const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional y amigable de Your Business House en Venezuela.
 
-    const encoder = new TextEncoder()
-    const decoder = new TextDecoder()
+CAPACIDADES:
+1. Buscar propiedades en venta y alquiler en toda Venezuela
+2. Responder preguntas sobre el proceso de compra/alquiler
+3. Dar información de contacto y redes sociales
+4. Asistencia general sobre bienes raíces
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          const reader = response.body?.getReader()
-          if (!reader) {
-            throw new Error("No reader available")
-          }
+PROCESO DE BÚSQUEDA DE PROPIEDADES:
+1. Pregunta si buscan comprar o alquilar
+2. Pregunta en qué ciudad o zona
+3. Pregunta el presupuesto (precio máximo)
+4. Opcionalmente pregunta tipo de inmueble y número de habitaciones
+5. Cuando tengas operación + ubicación + presupuesto máximo, USA LA HERRAMIENTA searchProperties
 
-          let buffer = ""
-          let fullResponse = ""
-          let hasSearched = false
+CONTACTO:
+- WhatsApp: +58 (424) 429-1541
+- Redes sociales: Menciona que pueden seguirlos en redes (sin especificar URLs)
 
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
+ESTILO:
+- Respuestas cortas y directas (máximo 2-3 líneas)
+- Una pregunta a la vez
+- Amigable pero profesional
+- NO menciones la herramienta ni el proceso técnico al usuario`
 
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split("\n")
-            buffer = lines.pop() || ""
-
-            for (const line of lines) {
-              const trimmedLine = line.trim()
-              if (!trimmedLine || trimmedLine === "data: [DONE]") continue
-
-              if (trimmedLine.startsWith("data: ")) {
-                try {
-                  const jsonStr = trimmedLine.slice(6)
-                  const parsed = JSON.parse(jsonStr)
-                  const content = parsed.choices?.[0]?.delta?.content
-
-                  if (content) {
-                    fullResponse += content
-
-                    const cleanContent = content.replace(/\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi, "")
-
-                    if (cleanContent.trim()) {
-                      const data = JSON.stringify({ type: "text", content: cleanContent })
-                      controller.enqueue(encoder.encode(`${data}\n`))
-                    }
-
-                    if (fullResponse.includes("[/BUSCAR_PROPIEDADES]") && !hasSearched) {
-                      hasSearched = true
-
-                      const searchMatch = fullResponse.match(
-                        /\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i,
-                      )
-
-                      if (searchMatch) {
-                        const searchContent = searchMatch[1]
-
-                        const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
-                        const ubicacionMatch = searchContent.match(/ubicacion:\s*([^\n]+)/i)
-                        const precioMinMatch = searchContent.match(/precio_min:\s*(\d+)/i)
-                        const precioMaxMatch = searchContent.match(/precio_max:\s*(\d+)/i)
-                        const tipoMatch = searchContent.match(/tipo:\s*([^\n]+)/i)
-                        const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
-
-                        if (operacionMatch && ubicacionMatch && precioMaxMatch) {
-                          const mysql = require("mysql2/promise")
-
-                          try {
-                            const connection = await mysql.createConnection(process.env.DATABASE_URL)
-
-                            let query = `
-                              SELECT i.*, 
-                                     (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id LIMIT 1) as image_url
-                              FROM inmueble i 
-                              WHERE i.status = 'disponible'
-                            `
-                            const params: any[] = []
-
-                            const operacion = operacionMatch[1].toLowerCase()
-                            if (operacion === "compra") {
-                              query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
-                            } else if (operacion === "alquiler") {
-                              query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
-                            }
-
-                            const ubicacion = ubicacionMatch[1].trim()
-                            query += " AND i.location LIKE ?"
-                            params.push(`%${ubicacion}%`)
-
-                            const precioMax = Number.parseInt(precioMaxMatch[1])
-                            const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
-
-                            if (operacion === "compra") {
-                              query += " AND i.purchase_price IS NOT NULL AND i.purchase_price <= ?"
-                              params.push(precioMax)
-                              if (precioMin > 0) {
-                                query += " AND i.purchase_price >= ?"
-                                params.push(precioMin)
-                              }
-                            } else {
-                              query += " AND i.rental_price IS NOT NULL AND i.rental_price <= ?"
-                              params.push(precioMax)
-                              if (precioMin > 0) {
-                                query += " AND i.rental_price >= ?"
-                                params.push(precioMin)
-                              }
-                            }
-
-                            if (tipoMatch) {
-                              const tipo = tipoMatch[1].trim().toLowerCase()
-                              query += " AND LOWER(i.property_type) LIKE ?"
-                              params.push(`%${tipo}%`)
-                            }
-
-                            if (habitacionesMatch) {
-                              query += " AND i.bedrooms >= ?"
-                              params.push(Number.parseInt(habitacionesMatch[1]))
-                            }
-
-                            query += " LIMIT 10"
-
-                            const [rows] = await connection.execute(query, params)
-
-                            if (Array.isArray(rows) && rows.length > 0) {
-                              const propertiesToSend = rows.map((row: any) => ({
-                                id: row.id,
-                                title: row.title,
-                                location: row.location,
-                                price: operacion === "compra" ? row.purchase_price : row.rental_price,
-                                bedrooms: row.bedrooms,
-                                bathrooms: row.bathrooms,
-                                area: row.area,
-                                image_url: row.image_url,
-                              }))
-
-                              const propertiesData = JSON.stringify({
-                                type: "properties",
-                                properties: propertiesToSend,
-                              })
-                              controller.enqueue(encoder.encode(`${propertiesData}\n`))
-                            } else {
-                              const noResultsMsg = JSON.stringify({
-                                type: "text",
-                                content: "\n\nNo encontré propiedades exactas. ¿Quieres ajustar algún criterio?",
-                              })
-                              controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
-                            }
-
-                            await connection.end()
-                          } catch (dbError) {
-                            console.error("Database error:", dbError)
-                            const errorMsg = JSON.stringify({
-                              type: "text",
-                              content: "\n\nTuve un problema buscando. Intenta de nuevo.",
-                            })
-                            controller.enqueue(encoder.encode(`${errorMsg}\n`))
-                          }
-                        }
-                      }
-                    }
-                  }
-                } catch (e) {
-                  // Skip parsing errors
-                }
-              }
-            }
-          }
-
-          controller.close()
-        } catch (error) {
-          console.error("Stream error:", error)
-          const errorData = JSON.stringify({
-            type: "text",
-            content: "Disculpa, tuve un problema. ¿Podrías intentarlo de nuevo?",
-          })
-          controller.enqueue(encoder.encode(`${errorData}\n`))
-          controller.close()
-        }
-      },
+    const result = streamText({
+      model: "gpt-3.5-turbo",
+      system: systemMessage,
+      messages: convertToModelMessages(messages),
+      tools,
+      stopWhen: stepCountIs(10),
+      temperature: 0.7,
+      maxOutputTokens: 500,
     })
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    })
+    return result.toUIMessageStreamResponse()
   } catch (error) {
-    console.error("Error in chat API:", error)
+    console.error("Error en chat API:", error)
 
-    const encoder = new TextEncoder()
-    const stream = new ReadableStream({
-      start(controller) {
-        const errorMsg = error instanceof Error ? error.message : "Error desconocido"
-        let userMessage = "Disculpa, hubo un problema técnico. Por favor intenta de nuevo."
-
-        if (errorMsg.includes("OPENAI_API_KEY")) {
-          userMessage =
-            "El chatbot necesita configuración. Por favor contacta al administrador para agregar la API key de OpenAI."
-        }
-
-        const data = JSON.stringify({
-          type: "text",
-          content: userMessage,
-        })
-        controller.enqueue(encoder.encode(`${data}\n`))
-        controller.close()
+    return new Response(
+      JSON.stringify({
+        error: "Hubo un problema. Por favor intenta de nuevo.",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
       },
-    })
-
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/plain",
-        "Cache-Control": "no-cache",
-      },
-    })
+    )
   }
 }
