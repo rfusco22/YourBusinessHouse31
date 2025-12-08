@@ -6,7 +6,7 @@ export function AgentsHero() {
       {/* Background video with high quality */}
       <div className="absolute inset-0 z-0">
         <video autoPlay muted loop playsInline className="w-full h-full object-cover">
-          <source src="/heroagente.mp4" type="video/mp4" />
+          <source src="/heroagente.MP4" type="video/mp4" />
           <img
             src="/agents-hero-patio.png"
             alt="Fondo de agentes inmobiliarios"
