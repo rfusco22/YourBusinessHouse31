@@ -159,6 +159,8 @@ INFORMACIÓN DE CONTACTO:
 
                   if (content) {
                     fullResponse += content
+                    const data = JSON.stringify({ type: "text", content: content })
+                    controller.enqueue(encoder.encode(`${data}\n`))
                   }
                 } catch (e) {
                   console.error("Error parsing SSE:", e)
@@ -167,14 +169,11 @@ INFORMACIÓN DE CONTACTO:
             }
           }
 
+          console.log("[v0] Full response received, checking for property search")
           const searchMatch = fullResponse.match(/\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i)
 
-          let textToShow = fullResponse
-          let propertiesToSend: any[] = []
-
           if (searchMatch) {
-            textToShow = fullResponse.replace(/\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi, "").trim()
-
+            console.log("[v0] Property search marker found!")
             const searchContent = searchMatch[1]
             const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
             const ubicacionMatch = searchContent.match(/ubicacion:\s*(.+?)(?:\n|$)/im)
@@ -183,6 +182,13 @@ INFORMACIÓN DE CONTACTO:
             const tipoMatch = searchContent.match(/tipo:\s*(.+?)(?:\n|$)/im)
             const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
             const banosMatch = searchContent.match(/banos:\s*(\d+)/i)
+
+            console.log("[v0] Search params:", {
+              operacion: operacionMatch?.[1],
+              ubicacion: ubicacionMatch?.[1],
+              precioMin: precioMinMatch?.[1],
+              precioMax: precioMaxMatch?.[1],
+            })
 
             if (operacionMatch && ubicacionMatch) {
               const mysql = require("mysql2/promise")
@@ -248,10 +254,12 @@ INFORMACIÓN DE CONTACTO:
 
                 query += " LIMIT 5"
 
+                console.log("[v0] Executing query:", query, params)
                 const [rows] = await connection.execute(query, params)
 
                 if (Array.isArray(rows) && rows.length > 0) {
-                  propertiesToSend = rows.map((row: any) => ({
+                  console.log("[v0] Found properties:", rows.length)
+                  const propertiesToSend = rows.map((row: any) => ({
                     id: row.id,
                     title: row.title,
                     location: row.location || `${row.city}, ${row.state}`,
@@ -261,23 +269,18 @@ INFORMACIÓN DE CONTACTO:
                     area: row.area,
                     image_url: row.image_url,
                   }))
+
+                  const propertiesData = JSON.stringify({ type: "properties", properties: propertiesToSend })
+                  controller.enqueue(encoder.encode(`${propertiesData}\n`))
+                } else {
+                  console.log("[v0] No properties found")
                 }
 
                 await connection.end()
               } catch (dbError) {
-                console.error("Database error:", dbError)
+                console.error("[v0] Database error:", dbError)
               }
             }
-          }
-
-          if (textToShow.trim()) {
-            const data = JSON.stringify({ type: "text", content: textToShow })
-            controller.enqueue(encoder.encode(`${data}\n`))
-          }
-
-          if (propertiesToSend.length > 0) {
-            const propertiesData = JSON.stringify({ type: "properties", properties: propertiesToSend })
-            controller.enqueue(encoder.encode(`${propertiesData}\n`))
           }
 
           controller.close()
