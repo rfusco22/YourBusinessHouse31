@@ -50,7 +50,7 @@ interface PermissionRequest {
   rejection_reason?: string
 }
 
-type TabType = "todos" | "alquilados" | "nuevo_inmueble"
+type TabType = "todos" | "alquilados" | "nuevo_inmueble" | "deshabilitado" | "habilitado"
 
 export default function AdminPermisos() {
   const router = useRouter()
@@ -100,6 +100,10 @@ export default function AdminPermisos() {
           filteredData = filteredData.filter((r: PermissionRequest) => r.request_type === "disponible_request")
         } else if (activeTab === "nuevo_inmueble") {
           filteredData = filteredData.filter((r: PermissionRequest) => r.request_type === "nuevo_inmueble")
+        } else if (activeTab === "deshabilitado") {
+          filteredData = filteredData.filter((r: PermissionRequest) => r.request_type === "disable_request")
+        } else if (activeTab === "habilitado") {
+          filteredData = filteredData.filter((r: PermissionRequest) => r.request_type === "enable_request")
         }
 
         setRequests(filteredData)
@@ -266,6 +270,21 @@ export default function AdminPermisos() {
     },
   ]
 
+  const getRequestTypeLabel = (requestType: string) => {
+    switch (requestType) {
+      case "disponible_request":
+        return "Cambio a Disponible"
+      case "nuevo_inmueble":
+        return "Nuevo Inmueble"
+      case "disable_request":
+        return "Deshabilitación"
+      case "enable_request":
+        return "Habilitación"
+      default:
+        return "Aprobación"
+    }
+  }
+
   if (isLoading) return <div className="flex items-center justify-center min-h-screen">Cargando...</div>
 
   return (
@@ -320,6 +339,24 @@ export default function AdminPermisos() {
             <Plus size={18} />
             Nuevo Inmueble
           </button>
+          <button
+            onClick={() => setActiveTab("deshabilitado")}
+            className={`px-4 py-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
+              activeTab === "deshabilitado" ? "text-primary border-b-2 border-primary" : "text-gray-400"
+            }`}
+          >
+            <AlertCircle size={18} />
+            Deshabilitado
+          </button>
+          <button
+            onClick={() => setActiveTab("habilitado")}
+            className={`px-4 py-2 font-semibold text-sm transition-colors flex items-center gap-2 ${
+              activeTab === "habilitado" ? "text-primary border-b-2 border-primary" : "text-gray-400"
+            }`}
+          >
+            <CheckCircle size={18} />
+            Habilitado
+          </button>
         </div>
 
         {/* Permissions List */}
@@ -341,11 +378,7 @@ export default function AdminPermisos() {
                   </div>
                   <div className="flex gap-2 items-center">
                     <span className="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400">
-                      {request.request_type === "disponible_request"
-                        ? "Cambio a Disponible"
-                        : request.request_type === "nuevo_inmueble"
-                          ? "Nuevo Inmueble"
-                          : "Aprobación"}
+                      {getRequestTypeLabel(request.request_type)}
                     </span>
                   </div>
                 </div>
@@ -393,7 +426,11 @@ export default function AdminPermisos() {
                 ? "pendientes"
                 : activeTab === "alquilados"
                   ? "de alquilados"
-                  : "de nuevo inmueble"}{" "}
+                  : activeTab === "nuevo_inmueble"
+                    ? "de nuevo inmueble"
+                    : activeTab === "deshabilitado"
+                      ? "deshabilitados"
+                      : "habilitados"}{" "}
               en este momento
             </div>
           )}

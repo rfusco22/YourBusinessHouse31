@@ -27,13 +27,13 @@ export async function POST(req: NextRequest) {
       [adminId, adminNotes || null, requestId],
     )
 
-    // If it's a disponible_request, update property status to disponible
     if (request.request_type === "disponible_request") {
       await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
-    }
-
-    // If it's property_approval, update property to active
-    if (request.request_type === "property_approval") {
+    } else if (request.request_type === "property_approval" || request.request_type === "nuevo_inmueble") {
+      await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
+    } else if (request.request_type === "disable_request") {
+      await query(`UPDATE inmueble SET status = 'deshabilitado' WHERE id = ?`, [request.inmueble_id])
+    } else if (request.request_type === "enable_request") {
       await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
     }
 

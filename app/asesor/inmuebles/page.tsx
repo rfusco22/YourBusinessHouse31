@@ -10,6 +10,7 @@ import AddPropertyForm from "@/components/add-property-form"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import JustificationModal from "@/components/justification-modal"
+import DisableRequestModal from "@/components/disable-request-modal"
 import {
   type PropertyFilters as PropertyFiltersType,
   AdvancedPropertyFilters,
@@ -33,7 +34,14 @@ interface Property {
   amenities?: string[]
 }
 
-type StatusTab = "disponible" | "alquilado" | "vendido" | "todos" | "todos-disponibles" | "todos-no-disponibles"
+type StatusTab =
+  | "disponible"
+  | "alquilado"
+  | "vendido"
+  | "deshabilitado"
+  | "todos-disponibles"
+  | "todos-no-disponibles"
+  | "todos"
 
 export default function InmueblesAsesor() {
   const router = useRouter()
@@ -54,6 +62,10 @@ export default function InmueblesAsesor() {
   const [pendingRequests, setPendingRequests] = useState<number[]>([])
   const [activeFilters, setActiveFilters] = useState<PropertyFiltersType>({})
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [showDisableRequestModal, setShowDisableRequestModal] = useState(false)
+  const [disableRequestProperty, setDisableRequestProperty] = useState<Property | null>(null)
+  const [disableRequestAction, setDisableRequestAction] = useState<"disable" | "enable">("disable")
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false)
 
   const navItems = [
     {
@@ -147,7 +159,12 @@ export default function InmueblesAsesor() {
       const data = await response.json()
       if (data.success) {
         const pendingIds = (data.data || [])
-          .filter((req: any) => req.request_type === "disponible_request")
+          .filter(
+            (req: any) =>
+              req.request_type === "disponible_request" ||
+              req.request_type === "disable_request" ||
+              req.request_type === "enable_request",
+          )
           .map((req: any) => req.inmueble_id)
         setPendingRequests(pendingIds)
       }
@@ -203,10 +220,14 @@ export default function InmueblesAsesor() {
 
   const filterByTab = (userProps: Property[], allProps: Property[], tab: StatusTab) => {
     let baseProperties: Property[]
-    if (tab === "todos-disponibles") {
+    if (tab === "disponible" || tab === "alquilado" || tab === "vendido" || tab === "deshabilitado") {
+      baseProperties = userProps.filter((p) => p.status === tab)
+    } else if (tab === "todos-disponibles") {
       baseProperties = allProps.filter((p) => p.status === "disponible")
     } else if (tab === "todos-no-disponibles") {
-      baseProperties = allProps.filter((p) => p.status === "alquilado" || p.status === "vendido")
+      baseProperties = allProps.filter(
+        (p) => p.status === "alquilado" || p.status === "vendido" || p.status === "deshabilitado",
+      )
     } else if (tab === "todos") {
       baseProperties = allProps
     } else {
@@ -233,7 +254,8 @@ export default function InmueblesAsesor() {
 
       if (activeTab === "todos") return true
       if (activeTab === "todos-disponibles") return p.status === "disponible"
-      if (activeTab === "todos-no-disponibles") return p.status === "alquilado" || p.status === "vendido"
+      if (activeTab === "todos-no-disponibles")
+        return p.status === "alquilado" || p.status === "vendido" || p.status === "deshabilitado"
       return p.status === activeTab
     })
 
@@ -254,7 +276,8 @@ export default function InmueblesAsesor() {
     let baseFiltered = sourceProperties.filter((p) => {
       if (activeTab === "todos") return true
       if (activeTab === "todos-disponibles") return p.status === "disponible"
-      if (activeTab === "todos-no-disponibles") return p.status === "alquilado" || p.status === "vendido"
+      if (activeTab === "todos-no-disponibles")
+        return p.status === "alquilado" || p.status === "vendido" || p.status === "deshabilitado"
       return p.status === activeTab
     })
 
@@ -378,45 +401,57 @@ export default function InmueblesAsesor() {
     }
   }
 
-  const handleTogglePropertyStatus = async (property: Property) => {
-    const newStatus = property.status === "disponible" ? "deshabilitado" : "disponible"
-    const actionText = newStatus === "deshabilitado" ? "deshabilitar" : "habilitar"
+  const handleTogglePropertyStatus = (property: Property) => {
+    const action = property.status === "deshabilitado" ? "enable" : "disable"
+    setDisableRequestProperty(property)
+    setDisableRequestAction(action)
+    setShowDisableRequestModal(true)
+  }
 
-    if (!window.confirm(`¿Estás seguro que deseas ${actionText} el inmueble "${property.title}"?`)) {
-      return
-    }
+  const handleSubmitDisableRequest = async (reason: string) => {
+    if (!disableRequestProperty) return
 
+    setIsSubmittingRequest(true)
     try {
-      const response = await fetch(`/api/properties?propertyId=${property.id}`, {
-        method: "PUT",
+      const response = await fetch("/api/permissions/request", {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          status: newStatus,
+          inmuebleId: disableRequestProperty.id,
+          asesorId: user.id,
+          requestType: disableRequestAction === "disable" ? "disable_request" : "enable_request",
+          justification: reason,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || `Error al ${actionText} el inmueble`)
+        throw new Error(data.error || "Error al enviar solicitud")
       }
 
       toast({
-        title: "Éxito",
-        description: `Inmueble ${newStatus === "deshabilitado" ? "deshabilitado" : "habilitado"} exitosamente`,
+        title: "Solicitud Enviada",
+        description: `Tu solicitud para ${disableRequestAction === "disable" ? "deshabilitar" : "habilitar"} el inmueble ha sido enviada a los administradores`,
         variant: "default",
       })
 
-      loadProperties(user.id)
+      setShowDisableRequestModal(false)
+      setDisableRequestProperty(null)
+
+      // Add to pending requests
+      setPendingRequests([...pendingRequests, disableRequestProperty.id])
     } catch (error) {
-      console.error("[v0] Toggle property status error:", error)
+      console.error("[v0] Submit disable request error:", error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : `Error al ${actionText} el inmueble`,
+        description: error instanceof Error ? error.message : "Error al enviar solicitud",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmittingRequest(false)
     }
   }
 
@@ -475,7 +510,12 @@ export default function InmueblesAsesor() {
         </div>
       </header>
 
-      <main className={cn("transition-all duration-500 px-6 py-8", sidebarCollapsed ? "ml-20" : "ml-64")}>
+      <main
+        className={cn(
+          "transition-all duration-500 px-3 sm:px-6 py-4 sm:py-8",
+          sidebarCollapsed ? "ml-16 sm:ml-20" : "ml-16 sm:ml-64",
+        )}
+      >
         {/* Search Bar */}
         <div className="mb-6 flex gap-4">
           <div className="flex-1 relative">
@@ -493,61 +533,36 @@ export default function InmueblesAsesor() {
         {/* Advanced Property Filters */}
         <AdvancedPropertyFilters onFilterChange={handleFilterChange} onReset={handleResetFilters} />
 
-        <div className="mb-8 flex gap-4 border-b border-primary/20">
-          <button
-            onClick={() => handleTabChange("disponible")}
-            className={cn(
-              "px-6 py-3 font-semibold text-sm transition-colors relative",
-              activeTab === "disponible" ? "text-primary" : "text-gray-400 hover:text-gray-200",
-            )}
-          >
-            Disponibles
-            {activeTab === "disponible" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
-          </button>
-          <button
-            onClick={() => handleTabChange("alquilado")}
-            className={cn(
-              "px-6 py-3 font-semibold text-sm transition-colors relative",
-              activeTab === "alquilado" ? "text-blue-400" : "text-gray-400 hover:text-gray-200",
-            )}
-          >
-            Alquilados
-            {activeTab === "alquilado" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400" />}
-          </button>
-          <button
-            onClick={() => handleTabChange("vendido")}
-            className={cn(
-              "px-6 py-3 font-semibold text-sm transition-colors relative",
-              activeTab === "vendido" ? "text-red-400" : "text-gray-400 hover:text-gray-200",
-            )}
-          >
-            Vendidos
-            {activeTab === "vendido" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-400" />}
-          </button>
-          <button
-            onClick={() => handleTabChange("todos-disponibles")}
-            className={cn(
-              "px-6 py-3 font-semibold text-sm transition-colors relative",
-              activeTab === "todos-disponibles" ? "text-green-400" : "text-gray-400 hover:text-gray-200",
-            )}
-          >
-            Todos Inmuebles Disponibles
-            {activeTab === "todos-disponibles" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-400" />
-            )}
-          </button>
-          <button
-            onClick={() => handleTabChange("todos-no-disponibles")}
-            className={cn(
-              "px-6 py-3 font-semibold text-sm transition-colors relative",
-              activeTab === "todos-no-disponibles" ? "text-orange-400" : "text-gray-400 hover:text-gray-200",
-            )}
-          >
-            Todos Inmuebles No Disponibles
-            {activeTab === "todos-no-disponibles" && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-400" />
-            )}
-          </button>
+        <div className="mb-8 sm:mb-8 flex gap-2 border-b border-primary/20 overflow-x-auto pb-2 scrollbar-hide">
+          {(
+            [
+              "disponible",
+              "alquilado",
+              "vendido",
+              "deshabilitado",
+              "todos-disponibles",
+              "todos-no-disponibles",
+              "todos",
+            ] as StatusTab[]
+          ).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => handleTabChange(tab)}
+              className={cn(
+                "px-3 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-sm transition-colors relative whitespace-nowrap flex-shrink-0",
+                activeTab === tab ? "text-primary" : "text-gray-400 hover:text-gray-200",
+              )}
+            >
+              {tab === "disponible" && "Disponibles"}
+              {tab === "alquilado" && "Alquilados"}
+              {tab === "vendido" && "Vendidos"}
+              {tab === "deshabilitado" && "Deshabilitados"}
+              {tab === "todos-disponibles" && "Todos Disponibles"}
+              {tab === "todos-no-disponibles" && "Todos No Disponibles"}
+              {tab === "todos" && "Todos Los Inmuebles"}
+              {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+            </button>
+          ))}
         </div>
 
         {/* Properties Grid */}
@@ -719,6 +734,7 @@ export default function InmueblesAsesor() {
                 {activeTab === "disponible" && "No hay inmuebles disponibles"}
                 {activeTab === "alquilado" && "No hay inmuebles alquilados"}
                 {activeTab === "vendido" && "No hay inmuebles vendidos"}
+                {activeTab === "deshabilitado" && "No hay inmuebles deshabilitados"}
                 {activeTab === "todos-disponibles" && "No hay inmuebles disponibles en el sistema"}
                 {activeTab === "todos-no-disponibles" && "No hay inmuebles no disponibles en el sistema"}
                 {activeTab === "todos" && "No hay inmuebles en el sistema"}
@@ -771,6 +787,19 @@ export default function InmueblesAsesor() {
           </div>
         </div>
       )}
+
+      {/* Disable Request Modal */}
+      <DisableRequestModal
+        isOpen={showDisableRequestModal}
+        onClose={() => {
+          setShowDisableRequestModal(false)
+          setDisableRequestProperty(null)
+        }}
+        onSubmit={handleSubmitDisableRequest}
+        propertyTitle={disableRequestProperty?.title || ""}
+        action={disableRequestAction}
+        isLoading={isSubmittingRequest}
+      />
     </div>
   )
 }

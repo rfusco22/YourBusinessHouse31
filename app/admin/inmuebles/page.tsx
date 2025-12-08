@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import AddPropertyForm from "@/components/add-property-form"
 import { AdvancedPropertyFilters, type PropertyFilters } from "@/components/advanced-property-filters"
 import PropertyCardAdmin from "@/components/property-card-admin"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 
 interface Property {
   id: number
@@ -29,7 +30,14 @@ interface Property {
   operation_type?: string
 }
 
-type StatusTab = "disponible" | "alquilado" | "vendido" | "todos-disponibles" | "todos-no-disponibles" | "todos"
+type StatusTab =
+  | "disponible"
+  | "alquilado"
+  | "vendido"
+  | "deshabilitado"
+  | "todos-disponibles"
+  | "todos-no-disponibles"
+  | "todos"
 
 export default function InmueblesAdmin() {
   const router = useRouter()
@@ -47,6 +55,12 @@ export default function InmueblesAdmin() {
   const [isLoadingEdit, setIsLoadingEdit] = useState(false)
   const [activeFilters, setActiveFilters] = useState<PropertyFilters>({})
   const [copiedId, setCopiedId] = useState<number | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    property: Property | null
+    action: "disable" | "enable"
+  }>({ open: false, property: null, action: "disable" })
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const navItems = [
     {
@@ -115,6 +129,7 @@ export default function InmueblesAdmin() {
           disponible: userPropsData.data.filter((p: Property) => p.status === "disponible").length,
           alquilado: userPropsData.data.filter((p: Property) => p.status === "alquilado").length,
           vendido: userPropsData.data.filter((p: Property) => p.status === "vendido").length,
+          deshabilitado: userPropsData.data.filter((p: Property) => p.status === "deshabilitado").length,
         })
       }
 
@@ -170,7 +185,7 @@ export default function InmueblesAdmin() {
 
     let baseProperties: Property[]
 
-    if (tab === "disponible" || tab === "alquilado" || tab === "vendido") {
+    if (tab === "disponible" || tab === "alquilado" || tab === "vendido" || tab === "deshabilitado") {
       // These tabs show only admin's own properties with the specific status
       baseProperties = userProps.filter((p) => p.status === tab)
       console.log("[v0] Filtering admin's own properties with status:", tab, "count:", baseProperties.length)
@@ -179,8 +194,10 @@ export default function InmueblesAdmin() {
       baseProperties = allProps.filter((p) => p.status === "disponible")
       console.log("[v0] Showing all available properties, count:", baseProperties.length)
     } else if (tab === "todos-no-disponibles") {
-      // Show all unavailable properties from all users
-      baseProperties = allProps.filter((p) => p.status === "alquilado" || p.status === "vendido")
+      // Show all unavailable properties from all users (including disabled)
+      baseProperties = allProps.filter(
+        (p) => p.status === "alquilado" || p.status === "vendido" || p.status === "deshabilitado",
+      )
       console.log("[v0] Showing all unavailable properties, count:", baseProperties.length)
     } else if (tab === "todos") {
       // Show all properties from all users
@@ -212,7 +229,7 @@ export default function InmueblesAdmin() {
       if (activeTab === "todos-disponibles") {
         matchesTab = p.status === "disponible"
       } else if (activeTab === "todos-no-disponibles") {
-        matchesTab = p.status === "alquilado" || p.status === "vendido"
+        matchesTab = p.status === "alquilado" || p.status === "vendido" || p.status === "deshabilitado"
       } else if (activeTab === "todos") {
         matchesTab = true
       } else {
@@ -243,7 +260,8 @@ export default function InmueblesAdmin() {
     let baseFiltered = sourceProperties.filter((p) => {
       if (activeTab === "todos") return true
       if (activeTab === "todos-disponibles") return p.status === "disponible"
-      if (activeTab === "todos-no-disponibles") return p.status === "alquilado" || p.status === "vendido"
+      if (activeTab === "todos-no-disponibles")
+        return p.status === "alquilado" || p.status === "vendido" || p.status === "deshabilitado"
       return p.status === activeTab
     })
     if (searchTerm) {
@@ -322,21 +340,34 @@ export default function InmueblesAdmin() {
   }
 
   const handleTogglePropertyStatus = async (property: Property) => {
-    const newStatus = property.status === "disponible" ? "deshabilitado" : "disponible"
-    const actionText = newStatus === "deshabilitado" ? "deshabilitar" : "habilitar"
+    const action = property.status === "deshabilitado" ? "enable" : "disable"
+    const actionText = action === "disable" ? "deshabilitar" : "habilitar"
 
-    if (!window.confirm(`¿Estás seguro que deseas ${actionText} el inmueble "${property.title}"?`)) {
-      return
-    }
+    setConfirmDialog({
+      open: true,
+      property,
+      action,
+    })
+  }
 
+  const confirmToggleStatus = async () => {
+    if (!confirmDialog.property) return
+
+    const property = confirmDialog.property
+    const action = confirmDialog.action
+    const actionText = action === "disable" ? "deshabilitado" : "habilitado"
+
+    setIsProcessing(true)
     try {
-      const response = await fetch(`/api/properties?propertyId=${property.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await fetch("/api/permissions/disable-enable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: newStatus,
+          propertyId: property.id,
+          userId: user.id,
+          userRole: "admin",
+          reason: `Acción directa del administrador: ${actionText}`,
+          action,
         }),
       })
 
@@ -348,18 +379,25 @@ export default function InmueblesAdmin() {
 
       toast({
         title: "Éxito",
-        description: `Inmueble ${newStatus === "deshabilitado" ? "deshabilitado" : "habilitado"} exitosamente`,
+        description: `Inmueble ${actionText} exitosamente`,
         variant: "default",
       })
 
-      await fetchAllProperties(user.id)
+      setConfirmDialog({ open: false, property: null, action: "disable" })
+
+      // Refresh properties
+      if (user?.id) {
+        fetchAllProperties(user.id)
+      }
     } catch (error) {
-      console.error("[v0] Toggle property status error:", error)
+      console.error(`[v0] Error ${action}:`, error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : `Error al ${actionText} el inmueble`,
         variant: "destructive",
       })
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -450,26 +488,35 @@ export default function InmueblesAdmin() {
         <AdvancedPropertyFilters onFilterChange={handleFilterChange} onReset={handleResetFilters} />
 
         <div className="mb-6 sm:mb-8 flex gap-2 border-b border-primary/20 overflow-x-auto pb-2">
-          {(["disponible", "alquilado", "vendido", "todos-disponibles", "todos-no-disponibles", "todos"] as const).map(
-            (tab) => (
-              <button
-                key={tab}
-                onClick={() => handleTabChange(tab)}
-                className={cn(
-                  "px-3 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-sm transition-colors relative whitespace-nowrap flex-shrink-0",
-                  activeTab === tab ? "text-primary" : "text-gray-400 hover:text-gray-200",
-                )}
-              >
-                {tab === "disponible" && "Disponibles"}
-                {tab === "alquilado" && "Alquilados"}
-                {tab === "vendido" && "Vendidos"}
-                {tab === "todos-disponibles" && "Todos Disponibles"}
-                {tab === "todos-no-disponibles" && "Todos No Disponibles"}
-                {tab === "todos" && "Todos Los Inmuebles"}
-                {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
-              </button>
-            ),
-          )}
+          {(
+            [
+              "disponible",
+              "alquilado",
+              "vendido",
+              "deshabilitado",
+              "todos-disponibles",
+              "todos-no-disponibles",
+              "todos",
+            ] as StatusTab[]
+          ).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => handleTabChange(tab)}
+              className={cn(
+                "px-3 sm:px-6 py-2 sm:py-3 font-semibold text-xs sm:text-sm transition-colors relative whitespace-nowrap flex-shrink-0",
+                activeTab === tab ? "text-primary" : "text-gray-400 hover:text-gray-200",
+              )}
+            >
+              {tab === "disponible" && "Disponibles"}
+              {tab === "alquilado" && "Alquilados"}
+              {tab === "vendido" && "Vendidos"}
+              {tab === "deshabilitado" && "Deshabilitados"}
+              {tab === "todos-disponibles" && "Todos Disponibles"}
+              {tab === "todos-no-disponibles" && "Todos No Disponibles"}
+              {tab === "todos" && "Todos Los Inmuebles"}
+              {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+            </button>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
@@ -516,6 +563,23 @@ export default function InmueblesAdmin() {
           />
         )}
       </main>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => !open && setConfirmDialog({ open: false, property: null, action: "disable" })}
+        title={confirmDialog.action === "disable" ? "¿Deshabilitar Inmueble?" : "¿Habilitar Inmueble?"}
+        description={
+          confirmDialog.action === "disable"
+            ? `¿Estás seguro que deseas deshabilitar el inmueble "${confirmDialog.property?.title}"? Este inmueble no será visible para los usuarios.`
+            : `¿Estás seguro que deseas habilitar el inmueble "${confirmDialog.property?.title}"? Este inmueble volverá a ser visible para los usuarios.`
+        }
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        onConfirm={confirmToggleStatus}
+        onCancel={() => setConfirmDialog({ open: false, property: null, action: "disable" })}
+        variant={confirmDialog.action === "disable" ? "warning" : "default"}
+        isLoading={isProcessing}
+      />
     </div>
   )
 }
