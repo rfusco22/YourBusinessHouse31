@@ -1,3 +1,5 @@
+import { query } from "@/lib/db"
+
 export const maxDuration = 60
 
 interface Message {
@@ -26,24 +28,23 @@ export async function POST(request: Request) {
 PROCESO DE BÚSQUEDA:
 1. Pregunta: "¿Estás buscando comprar o alquilar?"
 2. Pregunta: "¿En qué ciudad o zona de Venezuela?"  
-3. Pregunta: "¿Cuál es tu presupuesto aproximado?" (solo un número)
+3. Pregunta: "¿Cuál es tu presupuesto máximo?" (solo un número)
 4. Si no mencionó el tipo: "¿Qué tipo de inmueble? (casa, apartamento, local, terreno)"
 5. Si no mencionó habitaciones para apartamento/casa: "¿Cuántas habitaciones necesitas?"
 
-IMPORTANTE: Cuando el usuario dice su presupuesto (ej: "1000"), usa ese valor como precio_max. NO inventes un precio_min.
+IMPORTANTE: 
+- El presupuesto que dice el usuario es el precio_max
+- NO inventes precio_min
 
-Cuando tengas operación + ubicación + presupuesto, usa este formato EXACTO:
+Cuando tengas operación + ubicación + presupuesto + tipo, usa este formato EXACTO:
 
-[BUSCAR_PROPIEDADES]operacion:alquiler|ubicacion:prebo valencia|precio_max:1000|tipo:apartamento|habitaciones:4[/BUSCAR_PROPIEDADES]
-
-Después del marcador, NO escribas nada más. Las propiedades se mostrarán automáticamente.
+[BUSCAR_PROPIEDADES]operacion:alquiler|ubicacion:prebo|precio_max:1000|tipo:apartamento|habitaciones:4[/BUSCAR_PROPIEDADES]
 
 REGLAS:
 - Respuestas cortas (máximo 2 líneas)
 - UNA pregunta a la vez
-- El presupuesto del usuario es el precio_max (NO agregues precio_min)
-- Después de [BUSCAR_PROPIEDADES]...[/BUSCAR_PROPIEDADES] NO escribas texto adicional
-- NO menciones WhatsApp en tus respuestas
+- Después de [BUSCAR_PROPIEDADES]...[/BUSCAR_PROPIEDADES] NO escribas nada más
+- NO menciones WhatsApp
 
 WhatsApp contacto: +58 (424) 429-1541`
 
@@ -72,7 +73,7 @@ WhatsApp contacto: +58 (424) 429-1541`
 
     if (!response.ok) {
       const errorData = await response.json()
-      console.error("OpenAI API error:", errorData)
+      console.error("[v0] OpenAI API error:", errorData)
       throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`)
     }
 
@@ -90,13 +91,15 @@ WhatsApp contacto: +58 (424) 429-1541`
           let buffer = ""
           let fullResponse = ""
           let hasSearched = false
-          let contentBuffer = ""
+          let insideSearchBlock = false
+          let pendingText = ""
 
           while (true) {
             const { done, value } = await reader.read()
             if (done) {
-              if (contentBuffer && !contentBuffer.includes("[BUSCAR_PROPIEDADES]")) {
-                const data = JSON.stringify({ type: "text", content: contentBuffer })
+              // Send any remaining pending text that's not a search block
+              if (pendingText && !insideSearchBlock && !pendingText.includes("[BUSCAR_PROPIEDADES]")) {
+                const data = JSON.stringify({ type: "text", content: pendingText })
                 controller.enqueue(encoder.encode(`${data}\n`))
               }
               break
@@ -118,43 +121,47 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                   if (content) {
                     fullResponse += content
-                    contentBuffer += content
+                    pendingText += content
 
-                    if (contentBuffer.includes("[BUSCAR_PROPIEDADES]")) {
-                      console.log("[v0] Search block detected in buffer")
-                      const beforeSearch = contentBuffer.split("[BUSCAR_PROPIEDADES]")[0]
-                      if (beforeSearch) {
+                    if (pendingText.includes("[BUSCAR_PROPIEDADES]") && !insideSearchBlock) {
+                      insideSearchBlock = true
+                      // Send text before the search block
+                      const beforeSearch = pendingText.split("[BUSCAR_PROPIEDADES]")[0]
+                      if (beforeSearch.trim()) {
                         const data = JSON.stringify({ type: "text", content: beforeSearch })
                         controller.enqueue(encoder.encode(`${data}\n`))
                       }
-                      contentBuffer = ""
+                      pendingText = ""
                     }
 
                     if (fullResponse.includes("[/BUSCAR_PROPIEDADES]") && !hasSearched) {
                       hasSearched = true
-                      console.log("[v0] Search block complete, executing search")
+                      insideSearchBlock = false
+                      console.log("[v0] Search block complete, executing search...")
 
+                      // Show searching message
                       const searchingMsg = JSON.stringify({
                         type: "text",
-                        content: "\n\n🔍 Buscando opciones disponibles...",
+                        content: "🔍 Buscando opciones disponibles...\n\n",
                       })
                       controller.enqueue(encoder.encode(`${searchingMsg}\n`))
 
+                      // Parse search parameters
                       const searchMatch = fullResponse.match(
                         /\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i,
                       )
 
                       if (searchMatch) {
                         const searchContent = searchMatch[1].trim()
-                        console.log("[v0] Search content:", searchContent)
+                        console.log("[v0] Raw search content:", searchContent)
 
-                        const params: any = {}
+                        const params: Record<string, string> = {}
                         const paramParts = searchContent.split("|")
 
                         for (const part of paramParts) {
                           const colonIndex = part.indexOf(":")
                           if (colonIndex > -1) {
-                            const key = part.substring(0, colonIndex).trim()
+                            const key = part.substring(0, colonIndex).trim().toLowerCase()
                             const value = part.substring(colonIndex + 1).trim()
                             if (key && value) {
                               params[key] = value
@@ -162,193 +169,182 @@ WhatsApp contacto: +58 (424) 429-1541`
                           }
                         }
 
-                        console.log("[v0] Parsed search params:", JSON.stringify(params))
+                        console.log("[v0] Parsed params:", JSON.stringify(params))
 
-                        if (params.operacion && params.ubicacion) {
-                          const mysql = require("mysql2/promise")
+                        try {
+                          const operacion = (params.operacion || "alquiler").toLowerCase()
+                          const ubicacion = (params.ubicacion || "").toLowerCase()
+                          const precioMax = params.precio_max ? Number.parseInt(params.precio_max) : null
+                          const tipo = (params.tipo || "").toLowerCase()
+                          const habitaciones = params.habitaciones ? Number.parseInt(params.habitaciones) : null
 
-                          try {
-                            console.log("[v0] Connecting to database...")
-                            const connection = await mysql.createConnection(process.env.DATABASE_URL)
-                            console.log("[v0] Database connected successfully")
+                          console.log("[v0] Search criteria:", { operacion, ubicacion, precioMax, tipo, habitaciones })
 
-                            let query = `
-                              SELECT i.*, 
-                                     (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id ORDER BY display_order LIMIT 1) as image_url
-                              FROM inmueble i 
-                              WHERE i.status = 'disponible'
-                            `
-                            const queryParams: any[] = []
+                          // Build dynamic query
+                          let sql = `
+                            SELECT i.*, 
+                                   (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id ORDER BY display_order LIMIT 1) as image_url
+                            FROM inmueble i 
+                            WHERE i.status = 'disponible'
+                          `
+                          const queryParams: any[] = []
 
-                            const operacion = params.operacion.toLowerCase().trim()
-                            console.log("[v0] Operation:", operacion)
-
-                            if (operacion.includes("compr")) {
-                              query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
-                              query += " AND i.purchase_price IS NOT NULL"
-                            } else if (operacion.includes("alquil")) {
-                              query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
-                              query += " AND i.rental_price IS NOT NULL"
-                            }
-
-                            const ubicacion = params.ubicacion.toLowerCase().trim()
-                            console.log("[v0] Location:", ubicacion)
-                            query += " AND LOWER(i.location) LIKE ?"
-                            queryParams.push(`%${ubicacion}%`)
-
-                            const precioMax = params.precio_max ? Number.parseInt(params.precio_max) : null
-                            console.log("[v0] Max price:", precioMax)
-
-                            if (operacion.includes("compr")) {
-                              if (precioMax) {
-                                query += " AND i.purchase_price <= ?"
-                                queryParams.push(precioMax)
-                              }
-                            } else {
-                              if (precioMax) {
-                                query += " AND i.rental_price <= ?"
-                                queryParams.push(precioMax)
-                              }
-                            }
-
-                            if (params.tipo) {
-                              const tipo = params.tipo.toLowerCase().trim()
-                              console.log("[v0] Property type:", tipo)
-                              query += " AND LOWER(i.property_type) LIKE ?"
-                              queryParams.push(`%${tipo}%`)
-                            }
-
-                            if (params.habitaciones) {
-                              const habitaciones = Number.parseInt(params.habitaciones)
-                              console.log("[v0] Bedrooms:", habitaciones)
-                              query += " AND i.bedrooms >= ?"
-                              queryParams.push(habitaciones)
-                            }
-
-                            query += " ORDER BY i.created_at DESC LIMIT 10"
-
-                            console.log("[v0] Executing query:", query)
-                            console.log("[v0] With params:", JSON.stringify(queryParams))
-
-                            const [rows] = await connection.execute(query, queryParams)
-                            const properties = Array.isArray(rows) ? rows : []
-
-                            console.log("[v0] Query returned:", properties.length, "properties")
-
-                            if (properties.length > 0) {
-                              const propertiesToSend = properties.map((row: any) => ({
-                                id: row.id,
-                                title: row.title,
-                                location: row.location,
-                                price: operacion.includes("compr") ? row.purchase_price : row.rental_price,
-                                bedrooms: row.bedrooms,
-                                bathrooms: row.bathrooms,
-                                area: row.area,
-                                property_type: row.property_type,
-                                image_url: row.image_url,
-                              }))
-
-                              console.log("[v0] Sending properties to client:", propertiesToSend.length)
-
-                              const propertiesData = JSON.stringify({
-                                type: "properties",
-                                properties: propertiesToSend,
-                              })
-                              controller.enqueue(encoder.encode(`${propertiesData}\n`))
-
-                              const successMsg = JSON.stringify({
-                                type: "text",
-                                content: `\n\n✅ Encontré ${properties.length} ${properties.length === 1 ? "propiedad" : "propiedades"} que ${properties.length === 1 ? "coincide" : "coinciden"} con lo que buscas. ¿Te gustaría más información de alguna?`,
-                              })
-                              controller.enqueue(encoder.encode(`${successMsg}\n`))
-                            } else {
-                              console.log("[v0] No properties found, searching alternatives...")
-
-                              let altQuery = `
-                                SELECT DISTINCT 
-                                  i.location,
-                                  COUNT(*) as count,
-                                  ${operacion.includes("compr") ? "MIN(i.purchase_price)" : "MIN(i.rental_price)"} as min_price,
-                                  ${operacion.includes("compr") ? "MAX(i.purchase_price)" : "MAX(i.rental_price)"} as max_price
-                                FROM inmueble i 
-                                WHERE i.status = 'disponible'
-                              `
-                              const altParams: any[] = []
-
-                              if (operacion.includes("compr")) {
-                                altQuery += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
-                                altQuery += " AND i.purchase_price IS NOT NULL"
-                                if (precioMax) {
-                                  altQuery += " AND i.purchase_price <= ?"
-                                  altParams.push(precioMax * 1.5)
-                                }
-                              } else {
-                                altQuery += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
-                                altQuery += " AND i.rental_price IS NOT NULL"
-                                if (precioMax) {
-                                  altQuery += " AND i.rental_price <= ?"
-                                  altParams.push(precioMax * 1.5)
-                                }
-                              }
-
-                              if (params.tipo) {
-                                altQuery += " AND LOWER(i.property_type) LIKE ?"
-                                altParams.push(`%${params.tipo.toLowerCase()}%`)
-                              }
-
-                              altQuery += " GROUP BY i.location HAVING count >= 1 ORDER BY count DESC LIMIT 5"
-
-                              console.log("[v0] Alternative query:", altQuery)
-                              const [altRows] = await connection.execute(altQuery, altParams)
-                              const alternatives = Array.isArray(altRows) ? altRows : []
-
-                              console.log("[v0] Found", alternatives.length, "alternative locations")
-
-                              let suggestionMsg = `❌ No encontré ${params.tipo || "propiedades"} en ${params.ubicacion}`
-                              if (precioMax) suggestionMsg += ` hasta $${precioMax}`
-                              if (params.habitaciones) suggestionMsg += ` con ${params.habitaciones}+ habitaciones`
-                              suggestionMsg += "."
-
-                              if (alternatives.length > 0) {
-                                suggestionMsg += "\n\n🏘️ Pero tenemos opciones similares en:"
-                                alternatives.forEach((row: any, i: number) => {
-                                  suggestionMsg += `\n${i + 1}. **${row.location}**: ${row.count} ${row.count === 1 ? "propiedad" : "propiedades"} desde $${row.min_price}`
-                                })
-                                suggestionMsg += "\n\n¿Te interesa alguna de estas zonas?"
-                              } else {
-                                suggestionMsg += "\n\n¿Quieres intentar con un presupuesto diferente o en otra zona?"
-                              }
-
-                              const noResultsMsg = JSON.stringify({
-                                type: "text",
-                                content: suggestionMsg,
-                              })
-                              controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
-                            }
-
-                            await connection.end()
-                            console.log("[v0] Database connection closed")
-                          } catch (dbError) {
-                            console.error("[v0] Database error:", dbError)
-                            const errorMsg = JSON.stringify({
-                              type: "text",
-                              content:
-                                "\n\n⚠️ Hubo un problema al buscar en la base de datos. Por favor intenta nuevamente.",
-                            })
-                            controller.enqueue(encoder.encode(`${errorMsg}\n`))
+                          // Operation type filter
+                          if (operacion.includes("compr") || operacion === "compra" || operacion === "venta") {
+                            sql += ` AND (i.operation_type = 'compra' OR i.operation_type = 'venta' OR i.operation_type = 'ambos')`
+                          } else {
+                            sql += ` AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')`
                           }
+
+                          // Location filter - flexible search
+                          if (ubicacion) {
+                            sql += ` AND LOWER(i.location) LIKE ?`
+                            queryParams.push(`%${ubicacion}%`)
+                          }
+
+                          // Price filter based on operation type
+                          if (precioMax) {
+                            if (operacion.includes("compr") || operacion === "compra" || operacion === "venta") {
+                              sql += ` AND i.purchase_price <= ?`
+                            } else {
+                              sql += ` AND i.rental_price <= ?`
+                            }
+                            queryParams.push(precioMax)
+                          }
+
+                          // Property type filter
+                          if (tipo) {
+                            sql += ` AND LOWER(i.property_type) LIKE ?`
+                            queryParams.push(`%${tipo}%`)
+                          }
+
+                          // Bedrooms filter
+                          if (habitaciones) {
+                            sql += ` AND i.bedrooms >= ?`
+                            queryParams.push(habitaciones)
+                          }
+
+                          sql += ` ORDER BY i.created_at DESC LIMIT 10`
+
+                          console.log("[v0] Executing SQL:", sql)
+                          console.log("[v0] Query params:", queryParams)
+
+                          const properties = (await query(sql, queryParams)) as any[]
+
+                          console.log("[v0] Found properties:", properties.length)
+
+                          if (properties.length > 0) {
+                            // Format properties for display
+                            const isCompra =
+                              operacion.includes("compr") || operacion === "compra" || operacion === "venta"
+
+                            const propertiesToSend = properties.map((p: any) => ({
+                              id: p.id,
+                              title: p.title,
+                              location: p.location,
+                              price: isCompra ? p.purchase_price : p.rental_price,
+                              bedrooms: p.bedrooms,
+                              bathrooms: p.bathrooms,
+                              area: p.area,
+                              property_type: p.property_type,
+                              image_url: p.image_url,
+                            }))
+
+                            console.log("[v0] Sending properties to client")
+
+                            // Send properties data
+                            const propertiesData = JSON.stringify({
+                              type: "properties",
+                              properties: propertiesToSend,
+                            })
+                            controller.enqueue(encoder.encode(`${propertiesData}\n`))
+
+                            // Success message
+                            const successMsg = JSON.stringify({
+                              type: "text",
+                              content: `✅ ¡Encontré ${properties.length} ${properties.length === 1 ? "propiedad que coincide" : "propiedades que coinciden"} con tu búsqueda! ¿Te gustaría más información de alguna?`,
+                            })
+                            controller.enqueue(encoder.encode(`${successMsg}\n`))
+                          } else {
+                            console.log("[v0] No properties found, searching alternatives...")
+
+                            // Search for alternative locations
+                            const isCompra =
+                              operacion.includes("compr") || operacion === "compra" || operacion === "venta"
+
+                            let altSql = `
+                              SELECT 
+                                location,
+                                COUNT(*) as count,
+                                ${isCompra ? "MIN(purchase_price)" : "MIN(rental_price)"} as min_price,
+                                ${isCompra ? "MAX(purchase_price)" : "MAX(rental_price)"} as max_price
+                              FROM inmueble 
+                              WHERE status = 'disponible'
+                            `
+                            const altParams: any[] = []
+
+                            if (isCompra) {
+                              altSql += ` AND (operation_type = 'compra' OR operation_type = 'venta' OR operation_type = 'ambos')`
+                              altSql += ` AND purchase_price IS NOT NULL`
+                              if (precioMax) {
+                                altSql += ` AND purchase_price <= ?`
+                                altParams.push(precioMax * 1.5)
+                              }
+                            } else {
+                              altSql += ` AND (operation_type = 'alquiler' OR operation_type = 'ambos')`
+                              altSql += ` AND rental_price IS NOT NULL`
+                              if (precioMax) {
+                                altSql += ` AND rental_price <= ?`
+                                altParams.push(precioMax * 1.5)
+                              }
+                            }
+
+                            if (tipo) {
+                              altSql += ` AND LOWER(property_type) LIKE ?`
+                              altParams.push(`%${tipo}%`)
+                            }
+
+                            altSql += ` GROUP BY location HAVING count >= 1 ORDER BY count DESC LIMIT 5`
+
+                            const alternatives = (await query(altSql, altParams)) as any[]
+
+                            let noResultsMsg = `❌ No encontré ${tipo || "propiedades"} en ${params.ubicacion || "esa zona"}`
+                            if (precioMax) noResultsMsg += ` hasta $${precioMax.toLocaleString()}`
+                            if (habitaciones) noResultsMsg += ` con ${habitaciones}+ habitaciones`
+                            noResultsMsg += "."
+
+                            if (alternatives.length > 0) {
+                              noResultsMsg += "\n\n🏘️ **Pero tengo opciones similares en estas zonas:**\n"
+                              alternatives.forEach((alt: any, i: number) => {
+                                noResultsMsg += `\n${i + 1}. **${alt.location}**: ${alt.count} ${alt.count === 1 ? "propiedad" : "propiedades"} desde $${Number(alt.min_price).toLocaleString()}`
+                              })
+                              noResultsMsg += "\n\n¿Te interesa alguna de estas zonas?"
+                            } else {
+                              noResultsMsg += "\n\n¿Quieres intentar con un presupuesto diferente o en otra zona?"
+                            }
+
+                            const notFoundMsg = JSON.stringify({
+                              type: "text",
+                              content: noResultsMsg,
+                            })
+                            controller.enqueue(encoder.encode(`${notFoundMsg}\n`))
+                          }
+                        } catch (dbError) {
+                          console.error("[v0] Database error:", dbError)
+                          const errorMsg = JSON.stringify({
+                            type: "text",
+                            content: "⚠️ Hubo un problema técnico buscando propiedades. Por favor intenta de nuevo.",
+                          })
+                          controller.enqueue(encoder.encode(`${errorMsg}\n`))
                         }
                       }
 
-                      const afterSearch = fullResponse.split("[/BUSCAR_PROPIEDADES]")[1]
-                      if (afterSearch && afterSearch.trim()) {
-                        const data = JSON.stringify({ type: "text", content: afterSearch })
-                        controller.enqueue(encoder.encode(`${data}\n`))
-                      }
-                    } else if (!fullResponse.includes("[BUSCAR_PROPIEDADES]") && contentBuffer) {
-                      const data = JSON.stringify({ type: "text", content: contentBuffer })
+                      // Clear pending text after search
+                      pendingText = ""
+                    } else if (!insideSearchBlock && !pendingText.includes("[BUSCAR_PROPIEDADES]")) {
+                      const data = JSON.stringify({ type: "text", content: pendingText })
                       controller.enqueue(encoder.encode(`${data}\n`))
-                      contentBuffer = ""
+                      pendingText = ""
                     }
                   }
                 } catch (e) {
