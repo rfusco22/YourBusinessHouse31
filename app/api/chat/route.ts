@@ -4,6 +4,18 @@ import { query } from "@/lib/db"
 
 export const maxDuration = 60
 
+function getAIModel() {
+  // Prioridad: Groq (gratis) > OpenAI > AI Gateway de Vercel
+  if (process.env.GROQ_API_KEY) {
+    return "groq/llama-3.3-70b-versatile"
+  } else if (process.env.OPENAI_API_KEY) {
+    return "openai/gpt-4o-mini"
+  } else {
+    // Vercel AI Gateway (requiere despliegue en Vercel)
+    return "openai/gpt-4o-mini"
+  }
+}
+
 export async function POST(request: Request) {
   try {
     console.log("[v0] Chat API called")
@@ -14,6 +26,18 @@ export async function POST(request: Request) {
     if (!messages || !Array.isArray(messages)) {
       throw new Error("Messages array is required")
     }
+
+    const hasApiKey = !!(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || process.env.VERCEL)
+
+    if (!hasApiKey) {
+      console.error("[v0] ❌ NO API KEY FOUND! Please configure GROQ_API_KEY or OPENAI_API_KEY")
+      throw new Error(
+        "API key no configurada. Por favor configura GROQ_API_KEY o OPENAI_API_KEY en las variables de entorno.",
+      )
+    }
+
+    const aiModel = getAIModel()
+    console.log("[v0] Using AI model:", aiModel)
 
     const searchPropertiesTool = tool({
       description:
@@ -160,7 +184,7 @@ export async function POST(request: Request) {
     }))
 
     const result = streamText({
-      model: "openai/gpt-4o-mini",
+      model: aiModel,
       messages: formattedMessages,
       system: `Eres Hogarcito, un asesor inmobiliario profesional, amigable y experto de Your Business House en Venezuela. Tu misión es ayudar a los clientes a encontrar su hogar ideal de manera eficiente y personalizada.
 
@@ -309,9 +333,15 @@ RECUERDA: Tu objetivo es automatizar el proceso de búsqueda y llevar al cliente
     const stream = new ReadableStream({
       start(controller) {
         const errorMsg = error instanceof Error ? error.message : "Error desconocido"
+        let userMessage = "Disculpa, hubo un problema técnico. Por favor intenta de nuevo en unos segundos."
+
+        if (errorMsg.includes("API key")) {
+          userMessage = "El chatbot no está configurado correctamente. Por favor contacta al administrador del sitio."
+        }
+
         const data = JSON.stringify({
           type: "text",
-          content: `Disculpa, hubo un problema técnico. Por favor intenta de nuevo en unos segundos.`,
+          content: userMessage,
         })
         controller.enqueue(encoder.encode(`${data}\n`))
         controller.close()
