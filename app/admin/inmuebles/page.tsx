@@ -11,8 +11,6 @@ import { useToast } from "@/hooks/use-toast"
 import AddPropertyForm from "@/components/add-property-form"
 import { AdvancedPropertyFilters, type PropertyFilters } from "@/components/advanced-property-filters"
 import PropertyCardAdmin from "@/components/property-card-admin"
-import { useLiveProperties } from "@/hooks/use-live-properties"
-import { loadProperties } from "@/utils/loadProperties"
 
 interface Property {
   id: number
@@ -83,16 +81,6 @@ export default function InmueblesAdmin() {
     },
   ]
 
-  const { properties: liveUserProps, loading: userPropsLoading } = useLiveProperties({
-    interval: 5000,
-    shouldFetch: !!user?.id,
-  })
-
-  const { properties: liveAllProps, loading: allPropsLoading } = useLiveProperties({
-    interval: 5000,
-    shouldFetch: true,
-  })
-
   useEffect(() => {
     const storedUser = localStorage.getItem("user")
     if (!storedUser) {
@@ -101,21 +89,52 @@ export default function InmueblesAdmin() {
     }
     const parsedUser = JSON.parse(storedUser)
     setUser(parsedUser)
-    setIsLoading(false)
+
+    // Fetch properties once on mount
+    fetchAllProperties(parsedUser.id)
   }, [router])
 
-  useEffect(() => {
-    if (liveUserProps.length > 0) {
-      setUserProperties(liveUserProps)
-    }
-  }, [liveUserProps])
+  const fetchAllProperties = async (userId: number) => {
+    console.log("[v0] Fetching properties for admin, userId:", userId)
+    setIsLoading(true)
+    try {
+      // Fetch user's own properties
+      const userPropsResponse = await fetch(`/api/properties?userId=${userId}`)
+      const userPropsData = await userPropsResponse.json()
 
-  useEffect(() => {
-    if (liveAllProps.length > 0) {
-      setAllProperties(liveAllProps)
-      filterByTab(userProperties, liveAllProps, activeTab)
+      // Fetch all properties
+      const allPropsResponse = await fetch(`/api/properties`)
+      const allPropsData = await allPropsResponse.json()
+
+      console.log("[v0] User properties loaded:", userPropsData.data?.length || 0)
+      console.log("[v0] All properties loaded:", allPropsData.data?.length || 0)
+
+      if (userPropsData.success && userPropsData.data) {
+        setUserProperties(userPropsData.data)
+        console.log("[v0] User properties by status:", {
+          disponible: userPropsData.data.filter((p: Property) => p.status === "disponible").length,
+          alquilado: userPropsData.data.filter((p: Property) => p.status === "alquilado").length,
+          vendido: userPropsData.data.filter((p: Property) => p.status === "vendido").length,
+        })
+      }
+
+      if (allPropsData.success && allPropsData.data) {
+        setAllProperties(allPropsData.data)
+      }
+
+      // Apply initial filter based on active tab
+      filterByTab(userPropsData.data || [], allPropsData.data || [], activeTab)
+    } catch (error) {
+      console.error("[v0] Error fetching properties:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los inmuebles",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-  }, [liveAllProps])
+  }
 
   const applyFilters = (properties: Property[], filters: PropertyFilters) => {
     return properties.filter((property) => {
@@ -145,17 +164,34 @@ export default function InmueblesAdmin() {
   }
 
   const filterByTab = (userProps: Property[], allProps: Property[], tab: StatusTab) => {
+    console.log("[v0] Filtering by tab:", tab)
+    console.log("[v0] User props count:", userProps.length)
+    console.log("[v0] All props count:", allProps.length)
+
     let baseProperties: Property[]
-    if (tab === "todos-disponibles") {
-      baseProperties = allProps.filter((p) => p.status === "disponible")
-    } else if (tab === "todos-no-disponibles") {
-      baseProperties = allProps.filter((p) => p.status === "alquilado" || p.status === "vendido")
-    } else if (tab === "todos") {
-      baseProperties = allProps
-    } else {
+
+    if (tab === "disponible" || tab === "alquilado" || tab === "vendido") {
+      // These tabs show only admin's own properties with the specific status
       baseProperties = userProps.filter((p) => p.status === tab)
+      console.log("[v0] Filtering admin's own properties with status:", tab, "count:", baseProperties.length)
+    } else if (tab === "todos-disponibles") {
+      // Show all available properties from all users
+      baseProperties = allProps.filter((p) => p.status === "disponible")
+      console.log("[v0] Showing all available properties, count:", baseProperties.length)
+    } else if (tab === "todos-no-disponibles") {
+      // Show all unavailable properties from all users
+      baseProperties = allProps.filter((p) => p.status === "alquilado" || p.status === "vendido")
+      console.log("[v0] Showing all unavailable properties, count:", baseProperties.length)
+    } else if (tab === "todos") {
+      // Show all properties from all users
+      baseProperties = allProps
+      console.log("[v0] Showing all properties, count:", baseProperties.length)
+    } else {
+      baseProperties = []
     }
+
     const filtered = applyFilters(baseProperties, activeFilters)
+    console.log("[v0] After applying filters, count:", filtered.length)
     setFilteredProperties(filtered)
   }
 
@@ -166,6 +202,7 @@ export default function InmueblesAdmin() {
     if (activeTab === "todos" || activeTab === "todos-disponibles" || activeTab === "todos-no-disponibles") {
       sourceProperties = allProperties
     } else {
+      // For disponible, alquilado, vendido tabs - use userProperties
       sourceProperties = userProperties
     }
 
@@ -221,11 +258,6 @@ export default function InmueblesAdmin() {
     setFilteredProperties(finalFiltered)
   }
 
-  const handleResetFilters = () => {
-    setActiveFilters({})
-    filterByTab(userProperties, allProperties, activeTab)
-  }
-
   const handleTabChange = (tab: StatusTab) => {
     setActiveTab(tab)
     filterByTab(userProperties, allProperties, tab)
@@ -254,19 +286,13 @@ export default function InmueblesAdmin() {
         throw new Error(data.error || "Error al actualizar el estado")
       }
 
-      const updatedUserProps = userProperties.map((p) => (p.id === propertyId ? { ...p, status: newStatus } : p))
-      const updatedAllProps = allProperties.map((p) => (p.id === propertyId ? { ...p, status: newStatus } : p))
-
-      setUserProperties(updatedUserProps)
-      setAllProperties(updatedAllProps)
+      await fetchAllProperties(user.id)
 
       toast({
         title: "Éxito",
         description: `Inmueble marcado como ${newStatus}`,
         variant: "default",
       })
-
-      filterByTab(updatedUserProps, updatedAllProps, activeTab)
     } catch (error) {
       console.error("[v0] Status change error:", error)
       toast({
@@ -326,10 +352,7 @@ export default function InmueblesAdmin() {
         variant: "default",
       })
 
-      const { userProperties: newUserProps, allProperties: newAllProps } = await loadProperties(user?.id)
-      setUserProperties(newUserProps)
-      setAllProperties(newAllProps)
-      filterByTab(newUserProps, newAllProps, activeTab)
+      await fetchAllProperties(user.id)
     } catch (error) {
       console.error("[v0] Toggle property status error:", error)
       toast({
@@ -359,8 +382,18 @@ export default function InmueblesAdmin() {
     }
   }
 
-  if (isLoading || userPropsLoading || allPropsLoading)
-    return <div className="flex items-center justify-center min-h-screen">Cargando...</div>
+  const handleResetFilters = () => {
+    setActiveFilters({})
+    filterByTab(userProperties, allProperties, activeTab)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-neutral-900 to-black">
+        <div className="text-white">Cargando inmuebles...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-neutral-900 to-black">
@@ -467,10 +500,7 @@ export default function InmueblesAdmin() {
             onClose={() => setShowAddForm(false)}
             onSuccess={async () => {
               setShowAddForm(false)
-              const { userProperties: newUserProps, allProperties: newAllProps } = await loadProperties(user?.id)
-              setUserProperties(newUserProps)
-              setAllProperties(newAllProps)
-              filterByTab(newUserProps, newAllProps, activeTab)
+              await fetchAllProperties(user.id)
             }}
           />
         )}
@@ -481,10 +511,7 @@ export default function InmueblesAdmin() {
             onClose={() => setEditingProperty(null)}
             onSuccess={async () => {
               setEditingProperty(null)
-              const { userProperties: newUserProps, allProperties: newAllProps } = await loadProperties(user?.id)
-              setUserProperties(newUserProps)
-              setAllProperties(newAllProps)
-              filterByTab(newUserProps, newAllProps, activeTab)
+              await fetchAllProperties(user.id)
             }}
           />
         )}
