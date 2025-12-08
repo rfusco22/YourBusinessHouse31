@@ -23,32 +23,32 @@ export async function POST(request: Request) {
 
     const systemMessage = `Eres Hogarcito, un asesor inmobiliario profesional de Your Business House en Venezuela.
 
-PROCESO:
+PROCESO DE BÚSQUEDA:
 1. Pregunta: "¿Estás buscando comprar o alquilar?"
-2. Pregunta por ubicación: "¿En qué ciudad o zona de Venezuela?"
-3. Pregunta por presupuesto: "¿Cuál es tu presupuesto aproximado?"
-4. Pregunta por tipo (si no lo mencionó): "¿Qué tipo de inmueble buscas? (casa, apartamento, local, terreno)"
+2. Pregunta: "¿En qué ciudad o zona de Venezuela?"
+3. Pregunta: "¿Cuál es tu presupuesto aproximado?"
+4. Si no mencionó el tipo: "¿Qué tipo de inmueble? (casa, apartamento, local, terreno)"
 
-Cuando tengas: operación, ubicación y presupuesto, usa EXACTAMENTE este formato:
+Cuando tengas operación + ubicación + presupuesto, DEBES usar este formato EXACTO:
 
 [BUSCAR_PROPIEDADES]
-operacion: compra o alquiler
-ubicacion: ciudad o zona
-precio_min: numero
-precio_max: numero
-tipo: tipo de inmueble
-habitaciones: numero
+operacion:alquiler
+ubicacion:prebo valencia
+precio_min:500
+precio_max:1200
+tipo:apartamento
+habitaciones:2
 [/BUSCAR_PROPIEDADES]
 
-Espérame un momento mientras busco las mejores opciones para ti.
+Después del marcador, escribe: "Perfecto, déjame buscar las mejores opciones disponibles."
 
 REGLAS:
-- Respuestas MUY cortas (máximo 2 líneas)
+- Respuestas cortas (máximo 2 líneas)
 - UNA pregunta a la vez
-- NO menciones WhatsApp
-- Las propiedades se mostrarán automáticamente en el chat
+- NO menciones WhatsApp en tus respuestas
+- Las propiedades se mostrarán automáticamente
 
-WhatsApp: +58 (424) 429-1541`
+WhatsApp contacto: +58 (424) 429-1541`
 
     const formattedMessages: Message[] = [
       { role: "system", content: systemMessage },
@@ -92,6 +92,7 @@ WhatsApp: +58 (424) 429-1541`
 
           let buffer = ""
           let fullResponse = ""
+          let hasSearched = false
 
           while (true) {
             const { done, value } = await reader.read()
@@ -113,10 +114,157 @@ WhatsApp: +58 (424) 429-1541`
 
                   if (content) {
                     fullResponse += content
+
                     const cleanContent = content.replace(/\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi, "")
                     if (cleanContent.trim()) {
                       const data = JSON.stringify({ type: "text", content: cleanContent })
                       controller.enqueue(encoder.encode(`${data}\n`))
+                    }
+
+                    if (fullResponse.includes("[/BUSCAR_PROPIEDADES]") && !hasSearched) {
+                      hasSearched = true
+                      console.log("[v0] Complete search marker detected, executing search NOW")
+
+                      const searchMatch = fullResponse.match(
+                        /\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i,
+                      )
+
+                      if (searchMatch) {
+                        const searchContent = searchMatch[1]
+                        console.log("[v0] Search content:", searchContent)
+
+                        const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
+                        const ubicacionMatch = searchContent.match(/ubicacion:\s*([^\n]+)/i)
+                        const precioMinMatch = searchContent.match(/precio_min:\s*(\d+)/i)
+                        const precioMaxMatch = searchContent.match(/precio_max:\s*(\d+)/i)
+                        const tipoMatch = searchContent.match(/tipo:\s*([^\n]+)/i)
+                        const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
+
+                        console.log("[v0] Extracted params:", {
+                          operacion: operacionMatch?.[1],
+                          ubicacion: ubicacionMatch?.[1],
+                          precioMin: precioMinMatch?.[1],
+                          precioMax: precioMaxMatch?.[1],
+                          tipo: tipoMatch?.[1],
+                          habitaciones: habitacionesMatch?.[1],
+                        })
+
+                        if (operacionMatch && ubicacionMatch && precioMaxMatch) {
+                          console.log("[v0] All required params present, searching database...")
+
+                          const mysql = require("mysql2/promise")
+
+                          try {
+                            const connection = await mysql.createConnection(process.env.DATABASE_URL)
+                            console.log("[v0] Database connection established")
+
+                            let query = `
+                              SELECT i.*, 
+                                     (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id LIMIT 1) as image_url
+                              FROM inmueble i 
+                              WHERE i.status = 'disponible'
+                            `
+                            const params: any[] = []
+
+                            const operacion = operacionMatch[1].toLowerCase()
+                            if (operacion === "compra") {
+                              query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
+                            } else if (operacion === "alquiler") {
+                              query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
+                            }
+
+                            const ubicacion = ubicacionMatch[1].trim()
+                            query += " AND i.location LIKE ?"
+                            params.push(`%${ubicacion}%`)
+
+                            const precioMax = Number.parseInt(precioMaxMatch[1])
+                            const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
+
+                            if (operacion === "compra") {
+                              query += " AND i.purchase_price IS NOT NULL AND i.purchase_price <= ?"
+                              params.push(precioMax)
+                              if (precioMin > 0) {
+                                query += " AND i.purchase_price >= ?"
+                                params.push(precioMin)
+                              }
+                            } else {
+                              query += " AND i.rental_price IS NOT NULL AND i.rental_price <= ?"
+                              params.push(precioMax)
+                              if (precioMin > 0) {
+                                query += " AND i.rental_price >= ?"
+                                params.push(precioMin)
+                              }
+                            }
+
+                            if (tipoMatch) {
+                              const tipo = tipoMatch[1].trim().toLowerCase()
+                              query += " AND LOWER(i.property_type) LIKE ?"
+                              params.push(`%${tipo}%`)
+                            }
+
+                            if (habitacionesMatch) {
+                              query += " AND i.bedrooms >= ?"
+                              params.push(Number.parseInt(habitacionesMatch[1]))
+                            }
+
+                            query += " LIMIT 10"
+
+                            console.log("[v0] Executing SQL query:", query)
+                            console.log("[v0] With params:", params)
+
+                            const [rows] = await connection.execute(query, params)
+
+                            console.log("[v0] Query executed. Rows found:", Array.isArray(rows) ? rows.length : 0)
+
+                            if (Array.isArray(rows) && rows.length > 0) {
+                              console.log("[v0] Found", rows.length, "properties")
+                              console.log("[v0] First property:", rows[0])
+
+                              const propertiesToSend = rows.map((row: any) => ({
+                                id: row.id,
+                                title: row.title,
+                                location: row.location,
+                                price: operacion === "compra" ? row.purchase_price : row.rental_price,
+                                bedrooms: row.bedrooms,
+                                bathrooms: row.bathrooms,
+                                area: row.area,
+                                image_url: row.image_url,
+                              }))
+
+                              console.log("[v0] Sending properties to frontend:", propertiesToSend.length)
+
+                              const propertiesData = JSON.stringify({
+                                type: "properties",
+                                properties: propertiesToSend,
+                              })
+                              controller.enqueue(encoder.encode(`${propertiesData}\n`))
+
+                              console.log("[v0] Properties data sent successfully")
+                            } else {
+                              console.log("[v0] No properties found matching criteria")
+
+                              const noResultsMsg = JSON.stringify({
+                                type: "text",
+                                content:
+                                  "\n\nNo encontré propiedades que coincidan exactamente. ¿Quieres ajustar algún criterio?",
+                              })
+                              controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
+                            }
+
+                            await connection.end()
+                            console.log("[v0] Database connection closed")
+                          } catch (dbError) {
+                            console.error("[v0] Database error:", dbError)
+                            const errorMsg = JSON.stringify({
+                              type: "text",
+                              content: "\n\nTuve un problema al buscar en la base de datos. Intenta de nuevo.",
+                            })
+                            controller.enqueue(encoder.encode(`${errorMsg}\n`))
+                          }
+                        } else {
+                          console.log("[v0] Missing required search parameters")
+                        }
+                      }
                     }
                   }
                 } catch (e) {
@@ -124,149 +272,6 @@ WhatsApp: +58 (424) 429-1541`
                 }
               }
             }
-          }
-
-          console.log("[v0] Full AI response:", fullResponse)
-
-          const searchMatch = fullResponse.match(/\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i)
-
-          if (searchMatch) {
-            console.log("[v0] Property search marker detected!")
-            const searchContent = searchMatch[1]
-            console.log("[v0] Search content:", searchContent)
-
-            const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
-            const ubicacionMatch = searchContent.match(/ubicacion:\s*([^\n]+)/i)
-            const precioMinMatch = searchContent.match(/precio_min:\s*(\d+)/i)
-            const precioMaxMatch = searchContent.match(/precio_max:\s*(\d+)/i)
-            const tipoMatch = searchContent.match(/tipo:\s*([^\n]+)/i)
-            const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
-
-            console.log("[v0] Extracted params:", {
-              operacion: operacionMatch?.[1],
-              ubicacion: ubicacionMatch?.[1],
-              precioMin: precioMinMatch?.[1],
-              precioMax: precioMaxMatch?.[1],
-              tipo: tipoMatch?.[1],
-              habitaciones: habitacionesMatch?.[1],
-            })
-
-            if (operacionMatch && ubicacionMatch && precioMaxMatch) {
-              console.log("[v0] All required params present, searching database...")
-
-              const mysql = require("mysql2/promise")
-
-              try {
-                const connection = await mysql.createConnection(process.env.DATABASE_URL)
-                console.log("[v0] Database connection established")
-
-                let query = `
-                  SELECT i.*, 
-                         (SELECT image_url FROM inmueble_images WHERE inmueble_id = i.id LIMIT 1) as image_url
-                  FROM inmueble i 
-                  WHERE i.status = 'disponible'
-                `
-                const params: any[] = []
-
-                const operacion = operacionMatch[1].toLowerCase()
-                if (operacion === "compra") {
-                  query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
-                } else if (operacion === "alquiler") {
-                  query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
-                }
-
-                const ubicacion = ubicacionMatch[1].trim()
-                query += " AND i.location LIKE ?"
-                params.push(`%${ubicacion}%`)
-
-                const precioMax = Number.parseInt(precioMaxMatch[1])
-                const precioMin = precioMinMatch ? Number.parseInt(precioMinMatch[1]) : 0
-
-                if (operacion === "compra") {
-                  query += " AND i.purchase_price IS NOT NULL AND i.purchase_price <= ?"
-                  params.push(precioMax)
-                  if (precioMin > 0) {
-                    query += " AND i.purchase_price >= ?"
-                    params.push(precioMin)
-                  }
-                } else {
-                  query += " AND i.rental_price IS NOT NULL AND i.rental_price <= ?"
-                  params.push(precioMax)
-                  if (precioMin > 0) {
-                    query += " AND i.rental_price >= ?"
-                    params.push(precioMin)
-                  }
-                }
-
-                if (tipoMatch) {
-                  const tipo = tipoMatch[1].trim().toLowerCase()
-                  query += " AND LOWER(i.property_type) LIKE ?"
-                  params.push(`%${tipo}%`)
-                }
-
-                if (habitacionesMatch) {
-                  query += " AND i.bedrooms >= ?"
-                  params.push(Number.parseInt(habitacionesMatch[1]))
-                }
-
-                query += " LIMIT 10"
-
-                console.log("[v0] Executing SQL query:", query)
-                console.log("[v0] With params:", params)
-
-                const [rows] = await connection.execute(query, params)
-
-                console.log("[v0] Query executed. Rows found:", Array.isArray(rows) ? rows.length : 0)
-
-                if (Array.isArray(rows) && rows.length > 0) {
-                  console.log("[v0] Found", rows.length, "properties")
-                  console.log("[v0] First property:", rows[0])
-
-                  const propertiesToSend = rows.map((row: any) => ({
-                    id: row.id,
-                    title: row.title,
-                    location: row.location,
-                    price: operacion === "compra" ? row.purchase_price : row.rental_price,
-                    bedrooms: row.bedrooms,
-                    bathrooms: row.bathrooms,
-                    area: row.area,
-                    image_url: row.image_url,
-                  }))
-
-                  console.log("[v0] Sending properties to frontend:", propertiesToSend.length)
-
-                  const propertiesData = JSON.stringify({
-                    type: "properties",
-                    properties: propertiesToSend,
-                  })
-                  controller.enqueue(encoder.encode(`${propertiesData}\n`))
-
-                  console.log("[v0] Properties data sent successfully")
-                } else {
-                  console.log("[v0] No properties found matching criteria")
-
-                  const noResultsMsg = JSON.stringify({
-                    type: "text",
-                    content: "\n\nNo encontré propiedades que coincidan exactamente. ¿Quieres ajustar algún criterio?",
-                  })
-                  controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
-                }
-
-                await connection.end()
-                console.log("[v0] Database connection closed")
-              } catch (dbError) {
-                console.error("[v0] Database error:", dbError)
-                const errorMsg = JSON.stringify({
-                  type: "text",
-                  content: "\n\nTuve un problema al buscar en la base de datos. Intenta de nuevo.",
-                })
-                controller.enqueue(encoder.encode(`${errorMsg}\n`))
-              }
-            } else {
-              console.log("[v0] Missing required search parameters")
-            }
-          } else {
-            console.log("[v0] No property search marker found in response")
           }
 
           controller.close()
