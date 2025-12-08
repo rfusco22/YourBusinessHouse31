@@ -118,11 +118,13 @@ export async function POST(req: NextRequest) {
       console.log("[v0] Amenities added:", amenities)
     }
 
-    broadcastEvent("property-created", {
+    broadcastEvent("property_created", {
       propertyId,
       ownerId: owner_id,
       title,
       location,
+      type,
+      price,
       timestamp: Date.now(),
     })
 

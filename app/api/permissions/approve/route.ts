@@ -35,25 +35,36 @@ export async function POST(req: NextRequest) {
     console.log("[v0] Updated permission status to aprobado")
 
     // Update inmueble status based on request type
+    let newPropertyStatus = null
     if (request.request_type === "disponible_request") {
       await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
+      newPropertyStatus = "disponible"
       console.log("[v0] Set property to disponible")
     } else if (request.request_type === "property_approval" || request.request_type === "nuevo_inmueble") {
       await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
+      newPropertyStatus = "disponible"
       console.log("[v0] Set property to disponible (new property)")
     } else if (request.request_type === "disable_request") {
       await query(`UPDATE inmueble SET status = 'deshabilitado' WHERE id = ?`, [request.inmueble_id])
+      newPropertyStatus = "deshabilitado"
       console.log("[v0] Set property to deshabilitado")
     } else if (request.request_type === "enable_request") {
       await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
+      newPropertyStatus = "disponible"
       console.log("[v0] Set property to disponible (enabled)")
     }
 
-    broadcastEvent("permission-approved", {
+    const propertyResult = await query(`SELECT title, location FROM inmueble WHERE id = ?`, [request.inmueble_id])
+    const property = Array.isArray(propertyResult) && propertyResult.length > 0 ? propertyResult[0] : null
+
+    broadcastEvent("permission_approved", {
       requestId,
       propertyId: request.inmueble_id,
+      propertyTitle: property?.title || "Unknown",
+      propertyLocation: property?.location || "Unknown",
       asesorId: request.asesor_id,
       requestType: request.request_type,
+      newPropertyStatus,
       timestamp: Date.now(),
     })
 

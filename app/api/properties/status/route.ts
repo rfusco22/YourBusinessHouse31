@@ -20,13 +20,18 @@ export async function PUT(request: Request) {
 
     console.log("[v0] Updating property status:", propertyId, "to:", status)
 
+    const propertyResult = await query(`SELECT title, location FROM inmueble WHERE id = ?`, [propertyId])
+    const property = Array.isArray(propertyResult) && propertyResult.length > 0 ? propertyResult[0] : null
+
     await query(`UPDATE inmueble SET status = ? WHERE id = ?`, [status, propertyId])
 
     console.log("[v0] Property status updated successfully")
 
-    broadcastEvent("property-status-changed", {
+    broadcastEvent("property_status_changed", {
       propertyId,
-      status,
+      title: property?.title || "Unknown",
+      location: property?.location || "Unknown",
+      newStatus: status,
       timestamp: Date.now(),
     })
 

@@ -3,18 +3,18 @@
 // we'll use a simple broadcast mechanism
 
 export type WebSocketEventType =
-  | "property-created"
-  | "property-updated"
-  | "property-deleted"
-  | "property-status-changed"
-  | "permission-requested"
-  | "permission-approved"
-  | "permission-rejected"
-  | "alert-created"
-  | "alert-resolved"
-  | "user-created"
-  | "user-updated"
-  | "user-deleted"
+  | "property_created"
+  | "property_updated"
+  | "property_deleted"
+  | "property_status_changed"
+  | "permission_created"
+  | "permission_approved"
+  | "permission_rejected"
+  | "alert_created"
+  | "alert_resolved"
+  | "user_created"
+  | "user_updated"
+  | "user_deleted"
 
 interface BroadcastEvent {
   type: WebSocketEventType
@@ -42,8 +42,15 @@ export const broadcastEvent = (type: WebSocketEventType, data: any) => {
     eventQueue.shift()
   }
 
-  // In a real implementation, this would send to Redis/Pusher/etc
-  // For now, we'll use a polling mechanism on the client
+  // Try to import and broadcast to SSE clients
+  try {
+    // This is a workaround for serverless - in production you'd use Redis/Pusher
+    if (typeof globalThis !== "undefined" && (globalThis as any).__broadcastToClients) {
+      ;(globalThis as any).__broadcastToClients(type, data)
+    }
+  } catch (error) {
+    // SSE not available, events will be polled instead
+  }
 }
 
 export const getRecentEvents = (since = 0): BroadcastEvent[] => {

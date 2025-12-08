@@ -15,6 +15,8 @@ import {
   type PropertyFilters as PropertyFiltersType,
   AdvancedPropertyFilters,
 } from "@/components/advanced-property-filters"
+import { useRealtimeProperties } from "@/hooks/use-realtime-properties"
+import { useRealtimePermissions } from "@/hooks/use-realtime-permissions"
 
 interface Property {
   id: number
@@ -117,6 +119,18 @@ export default function InmueblesAsesor() {
       loadPendingRequests()
     }
   }, [isLoading, user])
+
+  useRealtimeProperties(() => {
+    console.log("[v0] Real-time property update received, reloading...")
+    if (user) {
+      loadProperties(user.id)
+    }
+  })
+
+  useRealtimePermissions(() => {
+    console.log("[v0] Real-time permission update received, reloading pending requests...")
+    loadPendingRequests()
+  })
 
   const loadProperties = async (userId: number) => {
     try {

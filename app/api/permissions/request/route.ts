@@ -18,9 +18,19 @@ export async function POST(req: NextRequest) {
       [inmuebleId, asesorId, requestType, justification],
     )
 
-    broadcastEvent("permission-requested", {
+    const propertyResult = await query(`SELECT title, location FROM inmueble WHERE id = ?`, [inmuebleId])
+    const asesorResult = await query(`SELECT name, email FROM users WHERE id = ?`, [asesorId])
+
+    const property = Array.isArray(propertyResult) && propertyResult.length > 0 ? propertyResult[0] : null
+    const asesor = Array.isArray(asesorResult) && asesorResult.length > 0 ? asesorResult[0] : null
+
+    broadcastEvent("permission_created", {
       propertyId: inmuebleId,
+      propertyTitle: property?.title || "Unknown",
+      propertyLocation: property?.location || "Unknown",
       asesorId,
+      asesorName: asesor?.name || "Unknown",
+      asesorEmail: asesor?.email || "Unknown",
       requestType,
       timestamp: Date.now(),
     })

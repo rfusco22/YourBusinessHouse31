@@ -31,6 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useRealtimePermissions } from "@/hooks/use-realtime-permissions"
 
 interface PermissionRequest {
   id: number
@@ -288,6 +289,11 @@ export default function GerenciaPermisos() {
       icon: <AlertCircle size={20} />,
     },
   ]
+
+  useRealtimePermissions(() => {
+    console.log("[v0] Real-time permission update received, reloading...")
+    loadPermissions()
+  })
 
   if (isLoading) return <div className="flex items-center justify-center min-h-screen">Cargando...</div>
 
