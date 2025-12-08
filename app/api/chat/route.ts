@@ -26,22 +26,24 @@ export async function POST(request: Request) {
 PROCESO DE BÚSQUEDA:
 1. Pregunta: "¿Estás buscando comprar o alquilar?"
 2. Pregunta: "¿En qué ciudad o zona de Venezuela?"  
-3. Pregunta: "¿Cuál es tu presupuesto aproximado?"
+3. Pregunta: "¿Cuál es tu presupuesto aproximado?" (solo un número)
 4. Si no mencionó el tipo: "¿Qué tipo de inmueble? (casa, apartamento, local, terreno)"
 5. Si no mencionó habitaciones para apartamento/casa: "¿Cuántas habitaciones necesitas?"
 
-Cuando tengas operación + ubicación + presupuesto, DEBES usar este formato EXACTO:
+IMPORTANTE: Cuando el usuario dice su presupuesto (ej: "1000"), usa ese valor como precio_max. NO inventes un precio_min.
 
-[BUSCAR_PROPIEDADES]operacion:alquiler|ubicacion:prebo valencia|precio_min:500|precio_max:1200|tipo:apartamento|habitaciones:4[/BUSCAR_PROPIEDADES]
+Cuando tengas operación + ubicación + presupuesto, usa este formato EXACTO:
+
+[BUSCAR_PROPIEDADES]operacion:alquiler|ubicacion:prebo valencia|precio_max:1000|tipo:apartamento|habitaciones:4[/BUSCAR_PROPIEDADES]
 
 Después del marcador, NO escribas nada más. Las propiedades se mostrarán automáticamente.
 
-REGLAS IMPORTANTES:
+REGLAS:
 - Respuestas cortas (máximo 2 líneas)
 - UNA pregunta a la vez
+- El presupuesto del usuario es el precio_max (NO agregues precio_min)
+- Después de [BUSCAR_PROPIEDADES]...[/BUSCAR_PROPIEDADES] NO escribas texto adicional
 - NO menciones WhatsApp en tus respuestas
-- Después de [BUSCAR_PROPIEDADES]...[/BUSCAR_PROPIEDADES] NO agregues texto adicional
-- Siempre sé amable y profesional
 
 WhatsApp contacto: +58 (424) 429-1541`
 
@@ -159,7 +161,7 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                         console.log("[v0] Parsed params:", params)
 
-                        if (params.operacion && params.ubicacion && (params.precio_max || params.precio_min)) {
+                        if (params.operacion && params.ubicacion) {
                           const mysql = require("mysql2/promise")
 
                           try {
@@ -174,9 +176,9 @@ WhatsApp contacto: +58 (424) 429-1541`
                             const queryParams: any[] = []
 
                             const operacion = params.operacion.toLowerCase()
-                            if (operacion === "compra") {
+                            if (operacion === "compra" || operacion === "comprar") {
                               query += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
-                            } else if (operacion === "alquiler") {
+                            } else if (operacion === "alquiler" || operacion === "alquilar") {
                               query += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
                             }
 
@@ -185,27 +187,20 @@ WhatsApp contacto: +58 (424) 429-1541`
                             queryParams.push(`%${ubicacion}%`)
 
                             const precioMax = params.precio_max ? Number.parseInt(params.precio_max) : null
-                            const precioMin = params.precio_min ? Number.parseInt(params.precio_min) : null
 
-                            if (operacion === "compra") {
+                            console.log("[v0] Budget (precio_max):", precioMax)
+
+                            if (operacion === "compra" || operacion === "comprar") {
                               query += " AND i.purchase_price IS NOT NULL"
                               if (precioMax) {
                                 query += " AND i.purchase_price <= ?"
                                 queryParams.push(precioMax)
-                              }
-                              if (precioMin) {
-                                query += " AND i.purchase_price >= ?"
-                                queryParams.push(precioMin)
                               }
                             } else {
                               query += " AND i.rental_price IS NOT NULL"
                               if (precioMax) {
                                 query += " AND i.rental_price <= ?"
                                 queryParams.push(precioMax)
-                              }
-                              if (precioMin) {
-                                query += " AND i.rental_price >= ?"
-                                queryParams.push(precioMin)
                               }
                             }
 
@@ -216,23 +211,29 @@ WhatsApp contacto: +58 (424) 429-1541`
                             }
 
                             if (params.habitaciones) {
-                              query += " AND i.bedrooms >= ?"
-                              queryParams.push(Number.parseInt(params.habitaciones))
+                              const habitaciones = Number.parseInt(params.habitaciones)
+                              query += " AND i.bedrooms = ?"
+                              queryParams.push(habitaciones)
                             }
 
                             query += " ORDER BY i.created_at DESC LIMIT 10"
 
-                            console.log("[v0] Executing query:", query)
-                            console.log("[v0] With params:", queryParams)
+                            console.log("[v0] Final SQL query:", query)
+                            console.log("[v0] Query parameters:", queryParams)
 
                             const [rows] = await connection.execute(query, queryParams)
+
+                            console.log("[v0] Query returned rows:", Array.isArray(rows) ? rows.length : 0)
 
                             if (Array.isArray(rows) && rows.length > 0) {
                               const propertiesToSend = rows.map((row: any) => ({
                                 id: row.id,
                                 title: row.title,
                                 location: row.location,
-                                price: operacion === "compra" ? row.purchase_price : row.rental_price,
+                                price:
+                                  operacion === "compra" || operacion === "comprar"
+                                    ? row.purchase_price
+                                    : row.rental_price,
                                 bedrooms: row.bedrooms,
                                 bathrooms: row.bathrooms,
                                 area: row.area,
@@ -240,7 +241,7 @@ WhatsApp contacto: +58 (424) 429-1541`
                                 image_url: row.image_url,
                               }))
 
-                              console.log("[v0] Found properties:", propertiesToSend.length)
+                              console.log("[v0] Sending properties to frontend:", propertiesToSend.length)
 
                               const propertiesData = JSON.stringify({
                                 type: "properties",
@@ -250,24 +251,24 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                               const successMsg = JSON.stringify({
                                 type: "text",
-                                content: `\n\nEncontré ${rows.length} ${rows.length === 1 ? "propiedad" : "propiedades"} que ${rows.length === 1 ? "coincide" : "coinciden"} con tu búsqueda en ${params.ubicacion}. ¿Te gustaría ver los detalles de alguna?`,
+                                content: `\n\nEncontré ${rows.length} ${rows.length === 1 ? "propiedad" : "propiedades"} que ${rows.length === 1 ? "coincide" : "coinciden"} con tu búsqueda. ¿Te gustaría ver los detalles de alguna?`,
                               })
                               controller.enqueue(encoder.encode(`${successMsg}\n`))
                             } else {
-                              console.log("[v0] No properties found, searching alternatives")
+                              console.log("[v0] No properties found with exact criteria, searching alternatives")
 
                               let altQuery = `
                                 SELECT DISTINCT 
                                   i.location,
                                   COUNT(*) as count,
-                                  ${operacion === "compra" ? "MIN(i.purchase_price)" : "MIN(i.rental_price)"} as min_price,
-                                  ${operacion === "compra" ? "MAX(i.purchase_price)" : "MAX(i.rental_price)"} as max_price
+                                  ${operacion === "compra" || operacion === "comprar" ? "MIN(i.purchase_price)" : "MIN(i.rental_price)"} as min_price,
+                                  ${operacion === "compra" || operacion === "comprar" ? "MAX(i.purchase_price)" : "MAX(i.rental_price)"} as max_price
                                 FROM inmueble i 
                                 WHERE i.status = 'disponible'
                               `
                               const altParams: any[] = []
 
-                              if (operacion === "compra") {
+                              if (operacion === "compra" || operacion === "comprar") {
                                 altQuery += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
                                 altQuery += " AND i.purchase_price IS NOT NULL"
                                 if (precioMax) {
@@ -291,26 +292,28 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                               altQuery += " GROUP BY i.location HAVING count >= 1 ORDER BY count DESC LIMIT 5"
 
-                              console.log("[v0] Alternative query:", altQuery)
-                              console.log("[v0] Alternative params:", altParams)
+                              console.log("[v0] Alternative locations query:", altQuery)
+                              console.log("[v0] Alternative locations params:", altParams)
 
                               const [altRows] = await connection.execute(altQuery, altParams)
 
                               let suggestionMsg = `No encontré ${params.tipo || "propiedades"} disponibles para ${operacion} en ${params.ubicacion}`
                               if (precioMax) {
-                                suggestionMsg += ` con un presupuesto de hasta $${precioMax}`
+                                suggestionMsg += ` con presupuesto de $${precioMax}`
+                              }
+                              if (params.habitaciones) {
+                                suggestionMsg += ` con ${params.habitaciones} habitaciones`
                               }
                               suggestionMsg += "."
 
                               if (Array.isArray(altRows) && altRows.length > 0) {
-                                suggestionMsg += "\n\nPero tengo opciones similares en estas zonas:"
+                                suggestionMsg += "\n\nTenemos opciones similares en:"
                                 altRows.forEach((row: any, index: number) => {
-                                  suggestionMsg += `\n\n${index + 1}. ${row.location}: ${row.count} ${row.count === 1 ? "propiedad" : "propiedades"} desde $${row.min_price}`
+                                  suggestionMsg += `\n${index + 1}. ${row.location}: ${row.count} ${row.count === 1 ? "propiedad" : "propiedades"} desde $${row.min_price}`
                                 })
-                                suggestionMsg += "\n\n¿Te gustaría ver opciones en alguna de estas zonas?"
+                                suggestionMsg += "\n\n¿Te interesa alguna de estas zonas?"
                               } else {
-                                suggestionMsg +=
-                                  "\n\n¿Quieres que busquemos con un presupuesto diferente o en otra zona?"
+                                suggestionMsg += "\n\n¿Quieres buscar con un presupuesto diferente o en otra zona?"
                               }
 
                               const noResultsMsg = JSON.stringify({
@@ -322,11 +325,11 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                             await connection.end()
                           } catch (dbError) {
-                            console.error("[v0] Database error:", dbError)
+                            console.error("[v0] Database connection or query error:", dbError)
                             const errorMsg = JSON.stringify({
                               type: "text",
                               content:
-                                "\n\nDisculpa, tuve un problema conectando con la base de datos. Por favor intenta de nuevo.",
+                                "\n\nDisculpa, tuve un problema conectando con la base de datos. Por favor intenta de nuevo en un momento.",
                             })
                             controller.enqueue(encoder.encode(`${errorMsg}\n`))
                           }
