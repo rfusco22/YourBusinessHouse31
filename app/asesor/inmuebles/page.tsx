@@ -130,8 +130,7 @@ export default function InmueblesAsesor() {
       console.log("[v0] All properties loaded:", allResult.data?.length)
       setAllProperties(allResult.data || [])
 
-      // Filter based on current tab
-      filterByTab(userResult.data || [], allResult.data || [], "disponible")
+      filterByTab(userResult.data || [], allResult.data || [], activeTab)
     } catch (error) {
       console.error("[v0] Load properties error:", error)
       toast({
@@ -601,7 +600,7 @@ export default function InmueblesAsesor() {
                   <p className="text-xl font-bold text-primary">${property.price.toLocaleString()}</p>
                 </div>
 
-                {activeTab !== "todos" && (
+                {activeTab !== "todos" && activeTab !== "todos-disponibles" && activeTab !== "todos-no-disponibles" && (
                   <>
                     <div className="flex gap-2 mb-3">
                       {property.status === "disponible" && (
@@ -657,7 +656,7 @@ export default function InmueblesAsesor() {
                       {(activeTab === "disponible" ||
                         activeTab === "alquilado" ||
                         activeTab === "vendido" ||
-                        property.owner_id === user.id) && (
+                        property.owner_id === user?.id) && (
                         <>
                           <Button
                             onClick={() => handleEditProperty(property)}
@@ -692,7 +691,9 @@ export default function InmueblesAsesor() {
                   </>
                 )}
 
-                {activeTab === "todos" && (
+                {(activeTab === "todos" ||
+                  activeTab === "todos-disponibles" ||
+                  activeTab === "todos-no-disponibles") && (
                   <div className="flex gap-2">
                     <Button
                       onClick={() => router.push(`/propiedades/${property.id}`)}
