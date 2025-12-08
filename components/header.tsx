@@ -18,12 +18,13 @@ export function Header() {
           {/* Logo and Brand */}
           <Link href="/" className="flex items-center gap-2 sm:gap-3">
             <Image
-              src="/logo-icon-gold.png"
+              src={theme === "dark" ? "/logo-dark.jpeg" : "/logo-icon-gold.png"}
               alt="Your Business House Logo Icon"
               width={80}
               height={80}
               className="h-12 sm:h-16 w-auto flex-shrink-0"
             />
+            {/* </CHANGE> */}
             <div className="flex flex-col justify-center gap-0">
               <div className="flex items-baseline gap-2">
                 <span className="text-sm sm:text-lg font-bold tracking-wide text-foreground">
