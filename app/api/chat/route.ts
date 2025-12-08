@@ -47,6 +47,7 @@ REGLAS:
 - UNA pregunta a la vez
 - NO menciones WhatsApp en tus respuestas
 - Las propiedades se mostrarán automáticamente
+- Siempre sé amable y profesional
 
 WhatsApp contacto: +58 (424) 429-1541`
 
@@ -216,9 +217,53 @@ WhatsApp contacto: +58 (424) 429-1541`
                               })
                               controller.enqueue(encoder.encode(`${propertiesData}\n`))
                             } else {
+                              let altQuery = `
+                                SELECT DISTINCT 
+                                  i.location,
+                                  COUNT(*) as count,
+                                  ${operacion === "compra" ? "MIN(i.purchase_price)" : "MIN(i.rental_price)"} as min_price,
+                                  ${operacion === "compra" ? "MAX(i.purchase_price)" : "MAX(i.rental_price)"} as max_price
+                                FROM inmueble i 
+                                WHERE i.status = 'disponible'
+                              `
+                              const altParams: any[] = []
+
+                              if (operacion === "compra") {
+                                altQuery += " AND (i.operation_type = 'compra' OR i.operation_type = 'ambos')"
+                                altQuery += " AND i.purchase_price IS NOT NULL AND i.purchase_price <= ?"
+                                altParams.push(precioMax * 1.2)
+                              } else {
+                                altQuery += " AND (i.operation_type = 'alquiler' OR i.operation_type = 'ambos')"
+                                altQuery += " AND i.rental_price IS NOT NULL AND i.rental_price <= ?"
+                                altParams.push(precioMax * 1.2)
+                              }
+
+                              if (tipoMatch) {
+                                const tipo = tipoMatch[1].trim().toLowerCase()
+                                altQuery += " AND LOWER(i.property_type) LIKE ?"
+                                altParams.push(`%${tipo}%`)
+                              }
+
+                              altQuery += " GROUP BY i.location HAVING count >= 1 ORDER BY count DESC LIMIT 5"
+
+                              const [altRows] = await connection.execute(altQuery, altParams)
+
+                              let suggestionMsg = `\n\nNo encontré ${tipoMatch ? tipoMatch[1] + "s" : "propiedades"} disponibles en ${ubicacion} con ese presupuesto.`
+
+                              if (Array.isArray(altRows) && altRows.length > 0) {
+                                suggestionMsg += "\n\nPero tengo opciones disponibles en:"
+                                altRows.forEach((row: any, index: number) => {
+                                  suggestionMsg += `\n${index + 1}. ${row.location} (${row.count} ${row.count === 1 ? "propiedad" : "propiedades"} desde $${row.min_price})`
+                                })
+                                suggestionMsg += "\n\n¿Te gustaría ver opciones en alguna de estas zonas?"
+                              } else {
+                                suggestionMsg +=
+                                  "\n\n¿Quieres que busquemos con un presupuesto diferente o en otra zona?"
+                              }
+
                               const noResultsMsg = JSON.stringify({
                                 type: "text",
-                                content: "\n\nNo encontré propiedades exactas. ¿Quieres ajustar algún criterio?",
+                                content: suggestionMsg,
                               })
                               controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
                             }
@@ -228,7 +273,7 @@ WhatsApp contacto: +58 (424) 429-1541`
                             console.error("Database error:", dbError)
                             const errorMsg = JSON.stringify({
                               type: "text",
-                              content: "\n\nTuve un problema buscando. Intenta de nuevo.",
+                              content: "\n\nTuve un problema buscando en la base de datos. Intenta de nuevo.",
                             })
                             controller.enqueue(encoder.encode(`${errorMsg}\n`))
                           }

@@ -51,6 +51,22 @@ export function AIChatbot() {
     scrollToBottom()
   }, [messages])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const eventSource = new EventSource("/api/events")
+
+    eventSource.addEventListener("property_created", (e) => {
+      const data = JSON.parse(e.data)
+      console.log("[v0] New property created:", data)
+      // Si hay una búsqueda activa, podríamos mostrar una notificación
+    })
+
+    return () => {
+      eventSource.close()
+    }
+  }, [isOpen])
+
   const sendMessage = async (userMessage: string) => {
     if (!userMessage.trim()) return
 
@@ -68,8 +84,6 @@ export function AIChatbot() {
     setProperties([])
 
     try {
-      console.log("[v0] Sending message to API:", userMessage)
-
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,8 +94,6 @@ export function AIChatbot() {
           })),
         }),
       })
-
-      console.log("[v0] Response status:", response.status)
 
       if (!response.ok) {
         throw new Error(`Error del servidor (${response.status})`)
@@ -108,7 +120,6 @@ export function AIChatbot() {
       while (true) {
         const { done, value } = await reader.read()
         if (done) {
-          console.log("[v0] Stream finished")
           break
         }
 
