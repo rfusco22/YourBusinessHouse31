@@ -135,270 +135,288 @@ export default function ContactPage() {
           {/* Content container */}
           <div className="relative h-full flex items-center justify-start z-10">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-              <div className="max-w-2xl space-y-6 sm:space-y-8">
+              <div className="max-w-2xl space-y-4 sm:space-y-6">
+                {/* Accent badge */}
                 <div className="inline-block">
                   <span className="text-xs sm:text-sm font-semibold text-white/80 uppercase tracking-widest bg-white/10 backdrop-blur-md px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/20">
-                    Contacto
+                    Estamos Aquí Para Ti
                   </span>
                 </div>
 
-                <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
+                <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-serif font-bold text-white text-balance leading-tight drop-shadow-lg">
                   Conecta con
                   <br />
                   nosotros
                 </h1>
 
-                {/* Contact Information Cards */}
-                <motion.div
-                  variants={containerVariants}
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true, amount: 0.3 }}
-                  className="space-y-6"
-                >
-                  {contactInfo.map((info, index) => (
-                    <motion.div
-                      key={info.title}
-                      variants={itemVariants}
-                      whileHover={{ scale: 1.03, y: -5 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <Card className="p-6 border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/80 backdrop-blur-sm">
-                        <div className="flex gap-4">
-                          <motion.div
-                            className="flex-shrink-0"
-                            whileHover={{ rotate: 360 }}
-                            transition={{ duration: 0.6 }}
-                          >
-                            <div
-                              className={`w-14 h-14 bg-gradient-to-br ${info.color} rounded-xl flex items-center justify-center shadow-lg`}
-                            >
-                              <info.icon className="w-7 h-7 text-white" />
-                            </div>
-                          </motion.div>
-                          <div className="flex-1">
-                            <h3 className="font-bold text-lg text-foreground mb-2">{info.title}</h3>
-                            {info.href ? (
-                              <a
-                                href={info.href}
-                                className="text-primary hover:text-primary/80 transition-colors font-medium hover:underline break-words block"
-                              >
-                                {info.content}
-                              </a>
-                            ) : (
-                              <p className="text-muted-foreground whitespace-pre-line text-sm leading-relaxed">
-                                {info.content}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    </motion.div>
-                  ))}
+                <p className="text-base sm:text-lg md:text-xl text-white/90 max-w-xl font-light leading-relaxed drop-shadow">
+                  Tu próximo hogar está a un mensaje de distancia. Nuestro equipo experto está listo para hacer realidad
+                  tus sueños inmobiliarios.
+                </p>
 
-                  {/* Social proof badge */}
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.6 }}
-                    className="text-center p-6 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl border border-primary/20"
+                {/* CTA Button */}
+                <div className="pt-2 sm:pt-4">
+                  <a
+                    href="#contact-form"
+                    className="inline-block bg-primary hover:bg-primary/90 text-white text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg"
                   >
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <CheckCircle2 className="w-5 h-5 text-primary" />
-                      <span className="font-semibold text-foreground">Respuesta Garantizada</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">Te respondemos en menos de 24 horas hábiles</p>
-                  </motion.div>
-                </motion.div>
+                    Enviar Mensaje
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                {/* Contact Form */}
+          {/* Decorative corner accent */}
+          <div className="absolute bottom-0 right-0 w-64 sm:w-96 h-64 sm:h-96 bg-gradient-to-tl from-primary/20 to-transparent blur-3xl pointer-events-none"></div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-12">
+            {/* Contact Information Cards */}
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, amount: 0.3 }}
+              className="space-y-6"
+            >
+              {contactInfo.map((info, index) => (
                 <motion.div
-                  initial={{ opacity: 0, x: 50 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true, amount: 0.3 }}
-                  transition={{ duration: 0.8 }}
-                  className="lg:col-span-2"
-                  id="contact-form"
+                  key={info.title}
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.03, y: -5 }}
+                  transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <Card className="p-8 lg:p-10 border-0 shadow-2xl bg-card/80 backdrop-blur-sm relative overflow-hidden">
-                    {/* Decorative gradient */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl -z-0" />
-
-                    <div className="relative z-10">
-                      <motion.h2
-                        initial={{ opacity: 0, y: -20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="text-3xl lg:text-4xl font-bold text-foreground mb-3"
-                      >
-                        Envíanos un Mensaje
-                      </motion.h2>
-                      <motion.p
-                        initial={{ opacity: 0 }}
-                        whileInView={{ opacity: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.2 }}
-                        className="text-muted-foreground mb-8"
-                      >
-                        Completa el formulario y nos pondremos en contacto contigo pronto
-                      </motion.p>
-
-                      {isSuccess ? (
-                        <motion.div
-                          initial={{ scale: 0.8, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className="py-16 text-center"
+                  <Card className="p-6 border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/80 backdrop-blur-sm">
+                    <div className="flex gap-4">
+                      <motion.div className="flex-shrink-0" whileHover={{ rotate: 360 }} transition={{ duration: 0.6 }}>
+                        <div
+                          className={`w-14 h-14 bg-gradient-to-br ${info.color} rounded-xl flex items-center justify-center shadow-lg`}
                         >
-                          <motion.div
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ duration: 0.5 }}
-                            className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6"
+                          <info.icon className="w-7 h-7 text-white" />
+                        </div>
+                      </motion.div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-lg text-foreground mb-2">{info.title}</h3>
+                        {info.href ? (
+                          <a
+                            href={info.href}
+                            className="text-primary hover:text-primary/80 transition-colors font-medium hover:underline break-words block"
                           >
-                            <CheckCircle2 className="w-12 h-12 text-white" />
-                          </motion.div>
-                          <h3 className="text-2xl font-bold text-foreground mb-2">¡Mensaje Enviado!</h3>
-                          <p className="text-muted-foreground">Te contactaremos pronto</p>
-                        </motion.div>
-                      ) : (
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                          {/* Name */}
-                          <motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.1 }}
-                          >
-                            <label className="block text-sm font-semibold text-foreground mb-2">
-                              Nombre completo *
-                            </label>
-                            <input
-                              type="text"
-                              name="name"
-                              value={formData.name}
-                              onChange={handleChange}
-                              required
-                              placeholder="Juan Pérez"
-                              className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
-                            />
-                          </motion.div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Email */}
-                            <motion.div
-                              initial={{ opacity: 0, x: -20 }}
-                              whileInView={{ opacity: 1, x: 0 }}
-                              viewport={{ once: true }}
-                              transition={{ delay: 0.2 }}
-                            >
-                              <label className="block text-sm font-semibold text-foreground mb-2">Email *</label>
-                              <input
-                                type="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleChange}
-                                required
-                                placeholder="tu@email.com"
-                                className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
-                              />
-                            </motion.div>
-
-                            {/* Phone */}
-                            <motion.div
-                              initial={{ opacity: 0, x: 20 }}
-                              whileInView={{ opacity: 1, x: 0 }}
-                              viewport={{ once: true }}
-                              transition={{ delay: 0.2 }}
-                            >
-                              <label className="block text-sm font-semibold text-foreground mb-2">Teléfono</label>
-                              <input
-                                type="tel"
-                                name="phone"
-                                value={formData.phone}
-                                onChange={handleChange}
-                                placeholder="+58 (212) XXX-XXXX"
-                                className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
-                              />
-                            </motion.div>
-                          </div>
-
-                          {/* Subject */}
-                          <motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.3 }}
-                          >
-                            <label className="block text-sm font-semibold text-foreground mb-2">Asunto *</label>
-                            <select
-                              name="subject"
-                              value={formData.subject}
-                              onChange={handleChange}
-                              required
-                              className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
-                            >
-                              <option value="">Selecciona un asunto</option>
-                              <option value="consulta">Consulta general</option>
-                              <option value="venta">Vender propiedad</option>
-                              <option value="compra">Comprar propiedad</option>
-                              <option value="alquiler">Alquilar propiedad</option>
-                              <option value="valoracion">Valoración de propiedad</option>
-                              <option value="otro">Otro</option>
-                            </select>
-                          </motion.div>
-
-                          {/* Message */}
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.4 }}
-                          >
-                            <label className="block text-sm font-semibold text-foreground mb-2">Mensaje *</label>
-                            <textarea
-                              name="message"
-                              value={formData.message}
-                              onChange={handleChange}
-                              required
-                              placeholder="Cuéntanos cómo podemos ayudarte..."
-                              rows={5}
-                              className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300 resize-none"
-                            />
-                          </motion.div>
-
-                          {/* Submit Button */}
-                          <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.5 }}
-                          >
-                            <Button
-                              type="submit"
-                              className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shadow-lg hover:shadow-xl"
-                              disabled={isSubmitting}
-                            >
-                              {isSubmitting ? (
-                                <motion.div
-                                  animate={{ rotate: 360 }}
-                                  transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-                                  className="w-6 h-6 border-3 border-white border-t-transparent rounded-full"
-                                />
-                              ) : (
-                                <>
-                                  Enviar Mensaje
-                                  <Send className="w-5 h-5 ml-2" />
-                                </>
-                              )}
-                            </Button>
-                          </motion.div>
-                        </form>
-                      )}
+                            {info.content}
+                          </a>
+                        ) : (
+                          <p className="text-muted-foreground whitespace-pre-line text-sm leading-relaxed">
+                            {info.content}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </Card>
                 </motion.div>
-              </div>
-            </div>
+              ))}
+
+              {/* Social proof badge */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.6 }}
+                className="text-center p-6 bg-gradient-to-br from-primary/10 to-secondary/10 rounded-2xl border border-primary/20"
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <CheckCircle2 className="w-5 h-5 text-primary" />
+                  <span className="font-semibold text-foreground">Respuesta Garantizada</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Te respondemos en menos de 24 horas hábiles</p>
+              </motion.div>
+            </motion.div>
+
+            {/* Contact Form */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.8 }}
+              className="lg:col-span-2"
+              id="contact-form"
+            >
+              <Card className="p-8 lg:p-10 border-0 shadow-2xl bg-card/80 backdrop-blur-sm relative overflow-hidden">
+                {/* Decorative gradient */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl -z-0" />
+
+                <div className="relative z-10">
+                  <motion.h2
+                    initial={{ opacity: 0, y: -20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    className="text-3xl lg:text-4xl font-bold text-foreground mb-3"
+                  >
+                    Envíanos un Mensaje
+                  </motion.h2>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.2 }}
+                    className="text-muted-foreground mb-8"
+                  >
+                    Completa el formulario y nos pondremos en contacto contigo pronto
+                  </motion.p>
+
+                  {isSuccess ? (
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="py-16 text-center"
+                    >
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 0.5 }}
+                        className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6"
+                      >
+                        <CheckCircle2 className="w-12 h-12 text-white" />
+                      </motion.div>
+                      <h3 className="text-2xl font-bold text-foreground mb-2">¡Mensaje Enviado!</h3>
+                      <p className="text-muted-foreground">Te contactaremos pronto</p>
+                    </motion.div>
+                  ) : (
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                      {/* Name */}
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.1 }}
+                      >
+                        <label className="block text-sm font-semibold text-foreground mb-2">Nombre completo *</label>
+                        <input
+                          type="text"
+                          name="name"
+                          value={formData.name}
+                          onChange={handleChange}
+                          required
+                          placeholder="Juan Pérez"
+                          className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                        />
+                      </motion.div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Email */}
+                        <motion.div
+                          initial={{ opacity: 0, x: -20 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: 0.2 }}
+                        >
+                          <label className="block text-sm font-semibold text-foreground mb-2">Email *</label>
+                          <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleChange}
+                            required
+                            placeholder="tu@email.com"
+                            className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                          />
+                        </motion.div>
+
+                        {/* Phone */}
+                        <motion.div
+                          initial={{ opacity: 0, x: 20 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: 0.2 }}
+                        >
+                          <label className="block text-sm font-semibold text-foreground mb-2">Teléfono</label>
+                          <input
+                            type="tel"
+                            name="phone"
+                            value={formData.phone}
+                            onChange={handleChange}
+                            placeholder="+58 (212) XXX-XXXX"
+                            className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                          />
+                        </motion.div>
+                      </div>
+
+                      {/* Subject */}
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.3 }}
+                      >
+                        <label className="block text-sm font-semibold text-foreground mb-2">Asunto *</label>
+                        <select
+                          name="subject"
+                          value={formData.subject}
+                          onChange={handleChange}
+                          required
+                          className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300"
+                        >
+                          <option value="">Selecciona un asunto</option>
+                          <option value="consulta">Consulta general</option>
+                          <option value="venta">Vender propiedad</option>
+                          <option value="compra">Comprar propiedad</option>
+                          <option value="alquiler">Alquilar propiedad</option>
+                          <option value="valoracion">Valoración de propiedad</option>
+                          <option value="otro">Otro</option>
+                        </select>
+                      </motion.div>
+
+                      {/* Message */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        <label className="block text-sm font-semibold text-foreground mb-2">Mensaje *</label>
+                        <textarea
+                          name="message"
+                          value={formData.message}
+                          onChange={handleChange}
+                          required
+                          placeholder="Cuéntanos cómo podemos ayudarte..."
+                          rows={5}
+                          className="w-full px-4 py-3.5 border-2 border-border rounded-xl bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300 resize-none"
+                        />
+                      </motion.div>
+
+                      {/* Submit Button */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.5 }}
+                      >
+                        <Button
+                          type="submit"
+                          className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity shadow-lg hover:shadow-xl"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? (
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+                              className="w-6 h-6 border-3 border-white border-t-transparent rounded-full"
+                            />
+                          ) : (
+                            <>
+                              Enviar Mensaje
+                              <Send className="w-5 h-5 ml-2" />
+                            </>
+                          )}
+                        </Button>
+                      </motion.div>
+                    </form>
+                  )}
+                </div>
+              </Card>
+            </motion.div>
           </div>
 
           <motion.div
