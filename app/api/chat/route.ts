@@ -40,7 +40,7 @@ tipo:apartamento
 habitaciones:2
 [/BUSCAR_PROPIEDADES]
 
-Después del marcador, escribe: "Perfecto, déjame buscar las mejores opciones disponibles."
+Después del marcador, escribe solo: "Buscando opciones..."
 
 REGLAS:
 - Respuestas cortas (máximo 2 líneas)
@@ -116,6 +116,7 @@ WhatsApp contacto: +58 (424) 429-1541`
                     fullResponse += content
 
                     const cleanContent = content.replace(/\[BUSCAR_PROPIEDADES\][\s\S]*?\[\/BUSCAR_PROPIEDADES\]/gi, "")
+
                     if (cleanContent.trim()) {
                       const data = JSON.stringify({ type: "text", content: cleanContent })
                       controller.enqueue(encoder.encode(`${data}\n`))
@@ -123,7 +124,6 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                     if (fullResponse.includes("[/BUSCAR_PROPIEDADES]") && !hasSearched) {
                       hasSearched = true
-                      console.log("[v0] Complete search marker detected, executing search NOW")
 
                       const searchMatch = fullResponse.match(
                         /\[BUSCAR_PROPIEDADES\]([\s\S]*?)\[\/BUSCAR_PROPIEDADES\]/i,
@@ -131,7 +131,6 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                       if (searchMatch) {
                         const searchContent = searchMatch[1]
-                        console.log("[v0] Search content:", searchContent)
 
                         const operacionMatch = searchContent.match(/operacion:\s*(compra|alquiler)/i)
                         const ubicacionMatch = searchContent.match(/ubicacion:\s*([^\n]+)/i)
@@ -140,23 +139,11 @@ WhatsApp contacto: +58 (424) 429-1541`
                         const tipoMatch = searchContent.match(/tipo:\s*([^\n]+)/i)
                         const habitacionesMatch = searchContent.match(/habitaciones:\s*(\d+)/i)
 
-                        console.log("[v0] Extracted params:", {
-                          operacion: operacionMatch?.[1],
-                          ubicacion: ubicacionMatch?.[1],
-                          precioMin: precioMinMatch?.[1],
-                          precioMax: precioMaxMatch?.[1],
-                          tipo: tipoMatch?.[1],
-                          habitaciones: habitacionesMatch?.[1],
-                        })
-
                         if (operacionMatch && ubicacionMatch && precioMaxMatch) {
-                          console.log("[v0] All required params present, searching database...")
-
                           const mysql = require("mysql2/promise")
 
                           try {
                             const connection = await mysql.createConnection(process.env.DATABASE_URL)
-                            console.log("[v0] Database connection established")
 
                             let query = `
                               SELECT i.*, 
@@ -209,17 +196,9 @@ WhatsApp contacto: +58 (424) 429-1541`
 
                             query += " LIMIT 10"
 
-                            console.log("[v0] Executing SQL query:", query)
-                            console.log("[v0] With params:", params)
-
                             const [rows] = await connection.execute(query, params)
 
-                            console.log("[v0] Query executed. Rows found:", Array.isArray(rows) ? rows.length : 0)
-
                             if (Array.isArray(rows) && rows.length > 0) {
-                              console.log("[v0] Found", rows.length, "properties")
-                              console.log("[v0] First property:", rows[0])
-
                               const propertiesToSend = rows.map((row: any) => ({
                                 id: row.id,
                                 title: row.title,
@@ -231,38 +210,28 @@ WhatsApp contacto: +58 (424) 429-1541`
                                 image_url: row.image_url,
                               }))
 
-                              console.log("[v0] Sending properties to frontend:", propertiesToSend.length)
-
                               const propertiesData = JSON.stringify({
                                 type: "properties",
                                 properties: propertiesToSend,
                               })
                               controller.enqueue(encoder.encode(`${propertiesData}\n`))
-
-                              console.log("[v0] Properties data sent successfully")
                             } else {
-                              console.log("[v0] No properties found matching criteria")
-
                               const noResultsMsg = JSON.stringify({
                                 type: "text",
-                                content:
-                                  "\n\nNo encontré propiedades que coincidan exactamente. ¿Quieres ajustar algún criterio?",
+                                content: "\n\nNo encontré propiedades exactas. ¿Quieres ajustar algún criterio?",
                               })
                               controller.enqueue(encoder.encode(`${noResultsMsg}\n`))
                             }
 
                             await connection.end()
-                            console.log("[v0] Database connection closed")
                           } catch (dbError) {
-                            console.error("[v0] Database error:", dbError)
+                            console.error("Database error:", dbError)
                             const errorMsg = JSON.stringify({
                               type: "text",
-                              content: "\n\nTuve un problema al buscar en la base de datos. Intenta de nuevo.",
+                              content: "\n\nTuve un problema buscando. Intenta de nuevo.",
                             })
                             controller.enqueue(encoder.encode(`${errorMsg}\n`))
                           }
-                        } else {
-                          console.log("[v0] Missing required search parameters")
                         }
                       }
                     }
@@ -276,7 +245,7 @@ WhatsApp contacto: +58 (424) 429-1541`
 
           controller.close()
         } catch (error) {
-          console.error("[v0] Stream error:", error)
+          console.error("Stream error:", error)
           const errorData = JSON.stringify({
             type: "text",
             content: "Disculpa, tuve un problema. ¿Podrías intentarlo de nuevo?",

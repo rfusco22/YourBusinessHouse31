@@ -132,7 +132,6 @@ export function AIChatbot() {
                 )
               }
             } else if (parsed.type === "properties" && Array.isArray(parsed.properties)) {
-              console.log("[v0] Received properties:", parsed.properties.length)
               setProperties(parsed.properties)
             }
           } catch (e) {
