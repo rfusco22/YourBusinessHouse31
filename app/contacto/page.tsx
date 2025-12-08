@@ -123,7 +123,7 @@ export default function ContactPage() {
         <div className="relative w-full h-screen min-h-[600px] max-h-[800px] overflow-hidden">
           <div className="absolute inset-0 z-0">
             <video autoPlay muted loop playsInline className="w-full h-full object-cover">
-              <source src="/herocontacto.mp4" type="video/mp4" />
+              <source src="/herocontacto.MP4" type="video/mp4" />
               <img src="/images/contact-hero.png" alt="Fondo de contacto" className="w-full h-full object-cover" />
             </video>
             <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/40" />
