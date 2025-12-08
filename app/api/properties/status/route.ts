@@ -1,5 +1,6 @@
 import { query } from "@/lib/db"
 import { NextResponse } from "next/server"
+import { broadcastEvent } from "@/lib/websocket-broadcast"
 
 // API route to update property status (vendido, alquilado, disponible)
 export async function PUT(request: Request) {
@@ -22,6 +23,13 @@ export async function PUT(request: Request) {
     await query(`UPDATE inmueble SET status = ? WHERE id = ?`, [status, propertyId])
 
     console.log("[v0] Property status updated successfully")
+
+    broadcastEvent("property-status-changed", {
+      propertyId,
+      status,
+      timestamp: Date.now(),
+    })
+
     return NextResponse.json({
       success: true,
       message: `Inmueble marcado como ${status}`,

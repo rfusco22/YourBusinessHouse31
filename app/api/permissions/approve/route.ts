@@ -1,5 +1,6 @@
 import { query } from "@/lib/db"
 import { type NextRequest, NextResponse } from "next/server"
+import { broadcastEvent } from "@/lib/websocket-broadcast"
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,6 +48,14 @@ export async function POST(req: NextRequest) {
       await query(`UPDATE inmueble SET status = 'disponible' WHERE id = ?`, [request.inmueble_id])
       console.log("[v0] Set property to disponible (enabled)")
     }
+
+    broadcastEvent("permission-approved", {
+      requestId,
+      propertyId: request.inmueble_id,
+      asesorId: request.asesor_id,
+      requestType: request.request_type,
+      timestamp: Date.now(),
+    })
 
     return NextResponse.json({
       success: true,

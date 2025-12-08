@@ -1,5 +1,6 @@
 import { query } from "@/lib/db"
 import { type NextRequest, NextResponse } from "next/server"
+import { broadcastEvent } from "@/lib/websocket-broadcast"
 
 export async function POST(req: NextRequest) {
   try {
@@ -116,6 +117,14 @@ export async function POST(req: NextRequest) {
       }
       console.log("[v0] Amenities added:", amenities)
     }
+
+    broadcastEvent("property-created", {
+      propertyId,
+      ownerId: owner_id,
+      title,
+      location,
+      timestamp: Date.now(),
+    })
 
     return NextResponse.json(
       {

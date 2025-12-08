@@ -71,6 +71,8 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "latest",
     "resend": "latest",
+    "socket.io": "latest",
+    "socket.io-client": "latest",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",

@@ -1,5 +1,6 @@
 import { query } from "@/lib/db"
 import { type NextRequest, NextResponse } from "next/server"
+import { broadcastEvent } from "@/lib/websocket-broadcast"
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +17,13 @@ export async function POST(req: NextRequest) {
        VALUES (?, ?, ?, ?, 'pendiente', NOW())`,
       [inmuebleId, asesorId, requestType, justification],
     )
+
+    broadcastEvent("permission-requested", {
+      propertyId: inmuebleId,
+      asesorId,
+      requestType,
+      timestamp: Date.now(),
+    })
 
     return NextResponse.json({
       success: true,
