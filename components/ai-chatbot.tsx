@@ -26,7 +26,7 @@ export function AIChatbot() {
       id: "welcome",
       role: "assistant",
       content:
-        "¡Hola! 👋 Soy Hogarcito, tu agente inmobiliario. Estoy aquí para ayudarte a encontrar tu próximo hogar en cualquier parte de Venezuela. ¿Estás buscando comprar o alquilar?",
+        "¡Hola! 👋 Soy Hogarcito, tu agente inmobiliario virtual. Estoy aquí para ayudarte a encontrar tu próximo hogar en cualquier parte de Venezuela. ¿Estás buscando comprar o alquilar?",
     },
   ])
   const [input, setInput] = useState("")
@@ -223,12 +223,12 @@ export function AIChatbot() {
                   </h3>
                   <div className="flex items-center gap-1 sm:gap-1.5">
                     <span className="inline-block w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-green-300 animate-pulse flex-shrink-0"></span>
-                    <p className="text-xs text-primary-foreground/90 whitespace-nowrap">En línea</p>
+                    <p className="text-xs text-primary-foreground/90 whitespace-nowrap">En línea con IA</p>
                   </div>
                 </div>
               </div>
               <p className="text-xs text-primary-foreground/85 line-clamp-2">
-                Tu Agente Inmobiliario
+                Tu Agente Inmobiliario Virtual Inteligente
               </p>
             </div>
 

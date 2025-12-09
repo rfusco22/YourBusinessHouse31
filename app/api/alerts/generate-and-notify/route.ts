@@ -2,6 +2,38 @@ import { query } from "@/lib/db"
 import { NextResponse } from "next/server"
 import { sendWhatsAppMessage } from "@/lib/twilio"
 
+async function getUsersToNotifyByRole(asesorId: number, asesorRole: string): Promise<any[]> {
+  let roleCondition = ""
+
+  // Role hierarchy:
+  // - asesor alert: notify asesor + admin + gerencia
+  // - admin alert: notify admin + gerencia
+  // - gerencia alert: notify only gerencia
+
+  if (asesorRole === "asesor") {
+    // Notify the asesor themselves, all admins, and all gerencia
+    roleCondition = `(id = ? OR role = 'admin' OR role = 'gerencia')`
+  } else if (asesorRole === "admin") {
+    // Notify only the admin themselves and all gerencia
+    roleCondition = `(id = ? OR role = 'gerencia')`
+  } else if (asesorRole === "gerencia") {
+    // Notify only gerencia (the creator)
+    roleCondition = `(id = ?)`
+  } else {
+    // Default: notify everyone
+    roleCondition = `(id = ? OR role = 'admin' OR role = 'gerencia')`
+  }
+
+  const users = await query(
+    `SELECT id, name, role, whatsapp, phone 
+     FROM users 
+     WHERE ${roleCondition} AND is_active = TRUE`,
+    [asesorId],
+  )
+
+  return users as any[]
+}
+
 export async function POST(req: Request) {
   try {
     console.log("[v0] Starting automatic alert generation and notification...")
@@ -19,7 +51,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // 1. Find properties that need alerts
     const propertiesQuery = `
       SELECT 
         i.id as property_id,
@@ -30,6 +61,7 @@ export async function POST(req: Request) {
         i.last_rental_date,
         i.owner_id as asesor_id,
         u.name as asesor_name,
+        u.role as asesor_role,
         u.whatsapp as asesor_whatsapp,
         u.phone as asesor_phone,
         CASE 
@@ -131,15 +163,19 @@ export async function POST(req: Request) {
         console.log("[v0] Created new alert:", alertId)
       }
 
-      // 4. Get all users to notify (asesor, admins, gerencia)
-      const usersToNotify = await query(
-        `SELECT id, name, role, whatsapp, phone 
-         FROM users 
-         WHERE (id = ? OR role = 'admin' OR role = 'gerencia') AND is_active = TRUE`,
-        [prop.asesor_id],
-      )
+      const asesorRole = prop.asesor_role || "asesor"
+      const usersToNotify = await getUsersToNotifyByRole(prop.asesor_id, asesorRole)
 
-      console.log("[v0] Users to notify:", (usersToNotify as any[]).length)
+      console.log(`[v0] Alert from ${asesorRole} - Users to notify:`, (usersToNotify as any[]).length)
+      console.log(
+        `[v0] Notification hierarchy: ${asesorRole} -> ${
+          asesorRole === "asesor"
+            ? "asesor + admin + gerencia"
+            : asesorRole === "admin"
+              ? "admin + gerencia"
+              : "gerencia only"
+        }`,
+      )
 
       // 5. Send WhatsApp notifications
       const notificationResults = []
@@ -159,21 +195,21 @@ export async function POST(req: Request) {
             ? `Este inmueble tiene ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"} sin alquilarse`
             : `Este inmueble tiene ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"} sin venderse`
 
-        const message = `🚨 *ALERTA DE INMUEBLE - Your Business House*
+        const message = `*ALERTA DE INMUEBLE - Your Business House*
 
-📍 *${prop.title}*
+*${prop.title}*
 
 ${alertMessage}
 
-🔗 Ver inmueble: ${propertyUrl}
+Ver inmueble: ${propertyUrl}
 
-📋 Tipo: ${prop.operation_type === "alquiler" ? "Alquiler" : prop.operation_type === "compra" ? "Venta" : "Ambos"}
-⏰ Días inactivo: ${prop.days_inactive} días (${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"})
-👤 Asesor: ${prop.asesor_name}
+Tipo: ${prop.operation_type === "alquiler" ? "Alquiler" : prop.operation_type === "compra" ? "Venta" : "Ambos"}
+Dias inactivo: ${prop.days_inactive} dias (${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"})
+Responsable: ${prop.asesor_name} (${asesorRole})
 
-💡 ${description}
+${description}
 
-_Alerta generada automáticamente_`
+_Alerta generada automaticamente_`
 
         const whatsappResult = await sendWhatsAppMessage(phoneNumber, message)
 
@@ -203,7 +239,7 @@ _Alerta generada automáticamente_`
 
         console.log(
           `[v0] WhatsApp to ${user.name} (${user.role}):`,
-          whatsappResult.success ? "✓ sent" : `✗ failed - ${whatsappResult.error}`,
+          whatsappResult.success ? "sent" : `failed - ${whatsappResult.error}`,
         )
       }
 
@@ -213,6 +249,7 @@ _Alerta generada automáticamente_`
         alertId,
         propertyId: prop.property_id,
         propertyTitle: prop.title,
+        asesorRole: asesorRole,
         action: (existingAlert as any[]).length > 0 ? "updated" : "created",
         notified: true,
         notifications: notificationResults,
