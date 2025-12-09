@@ -1,9 +1,9 @@
 import { query } from "@/lib/db"
 import { NextResponse } from "next/server"
-import { sendWhatsAppMessage } from "@/lib/twilio"
+import { sendAlertEmail } from "@/lib/email"
 
 async function getUsersToNotifyByRole(asesorId: number, asesorRole: string): Promise<any[]> {
-  let roleCondition = ""
+  let users: any[] = []
 
   // Role hierarchy:
   // - asesor alert: notify asesor + admin + gerencia
@@ -11,46 +11,50 @@ async function getUsersToNotifyByRole(asesorId: number, asesorRole: string): Pro
   // - gerencia alert: notify only gerencia
 
   if (asesorRole === "asesor") {
-    // Notify the asesor themselves, all admins, and all gerencia
-    roleCondition = `(id = ? OR role = 'admin' OR role = 'gerencia')`
+    // Get the asesor
+    const asesor = await query(`SELECT id, name, email, role FROM users WHERE id = ? AND is_active = TRUE`, [asesorId])
+    // Get all admins and gerencia
+    const supervisors = await query(
+      `SELECT id, name, email, role FROM users WHERE (role = 'admin' OR role = 'gerencia') AND is_active = TRUE`,
+    )
+    users = [...(asesor as any[]), ...(supervisors as any[])]
   } else if (asesorRole === "admin") {
-    // Notify only the admin themselves and all gerencia
-    roleCondition = `(id = ? OR role = 'gerencia')`
+    // Get the admin
+    const admin = await query(`SELECT id, name, email, role FROM users WHERE id = ? AND is_active = TRUE`, [asesorId])
+    // Get all gerencia
+    const gerencia = await query(`SELECT id, name, email, role FROM users WHERE role = 'gerencia' AND is_active = TRUE`)
+    users = [...(admin as any[]), ...(gerencia as any[])]
   } else if (asesorRole === "gerencia") {
-    // Notify only gerencia (the creator)
-    roleCondition = `(id = ?)`
+    // Only notify the gerencia user
+    const gerencia = await query(`SELECT id, name, email, role FROM users WHERE id = ? AND is_active = TRUE`, [
+      asesorId,
+    ])
+    users = gerencia as any[]
   } else {
-    // Default: notify everyone
-    roleCondition = `(id = ? OR role = 'admin' OR role = 'gerencia')`
+    // Default: notify everyone with admin or gerencia role plus the owner
+    const owner = await query(`SELECT id, name, email, role FROM users WHERE id = ? AND is_active = TRUE`, [asesorId])
+    const supervisors = await query(
+      `SELECT id, name, email, role FROM users WHERE (role = 'admin' OR role = 'gerencia') AND is_active = TRUE`,
+    )
+    users = [...(owner as any[]), ...(supervisors as any[])]
   }
 
-  const users = await query(
-    `SELECT id, name, role, whatsapp, phone 
-     FROM users 
-     WHERE ${roleCondition} AND is_active = TRUE`,
-    [asesorId],
-  )
-
-  return users as any[]
+  return users
 }
 
 export async function POST(req: Request) {
   try {
-    console.log("[v0] Starting automatic alert generation and notification...")
+    console.log("[v0] Starting automatic alert generation and email notification...")
 
+    // Check if property_alerts table exists
     try {
       await query("SELECT 1 FROM property_alerts LIMIT 1")
     } catch (tableError) {
-      console.error("[v0] property_alerts table does not exist. Please run script 12_create_alerts_system.sql")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Alerts system not initialized. Please run database migration script 12_create_alerts_system.sql",
-        },
-        { status: 500 },
-      )
+      console.error("[v0] property_alerts table does not exist")
+      return NextResponse.json({ success: false, error: "Alerts system not initialized" }, { status: 500 })
     }
 
+    // 1. Get all available properties with inactivity data
     const propertiesQuery = `
       SELECT 
         i.id as property_id,
@@ -60,10 +64,11 @@ export async function POST(req: Request) {
         i.last_sale_date,
         i.last_rental_date,
         i.owner_id as asesor_id,
+        i.price,
+        i.location,
         u.name as asesor_name,
         u.role as asesor_role,
-        u.whatsapp as asesor_whatsapp,
-        u.phone as asesor_phone,
+        u.email as asesor_email,
         CASE 
           WHEN i.operation_type = 'compra' AND i.last_sale_date IS NOT NULL 
             THEN DATEDIFF(NOW(), i.last_sale_date)
@@ -95,10 +100,9 @@ export async function POST(req: Request) {
     console.log("[v0] Properties requiring alerts:", alertsToCreate.length)
 
     const results = []
-
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://yourbusinesshouse-production.up.railway.app"
 
-    // 3. For each property, create or update alert
+    // 3. For each property, create or update alert and send email immediately
     for (const prop of alertsToCreate) {
       let alertType: "no_vendido_2m" | "no_alquilado_1m" = "no_vendido_2m"
       let title = ""
@@ -107,21 +111,21 @@ export async function POST(req: Request) {
 
       if (prop.operation_type === "alquiler" && prop.days_inactive >= 30) {
         alertType = "no_alquilado_1m"
-        title = `Propiedad no alquilada - ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}`
-        description = `"${prop.title}" no ha sido alquilada en ${prop.days_inactive} días. Considera revisar el precio de alquiler o mejorar la publicación.`
+        title = `Propiedad no alquilada`
+        description = `"${prop.title}" no ha sido alquilada en ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}. Considera revisar el precio de alquiler o mejorar la publicación.`
       } else if (prop.operation_type === "compra" && prop.days_inactive >= 60) {
         alertType = "no_vendido_2m"
-        title = `Propiedad no vendida - ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}`
-        description = `"${prop.title}" no ha sido vendida en ${prop.days_inactive} días. Considera revisar el precio o la estrategia de venta.`
+        title = `Propiedad no vendida`
+        description = `"${prop.title}" no ha sido vendida en ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}. Considera revisar el precio o la estrategia de venta.`
       } else if (prop.operation_type === "ambos") {
         if (prop.days_inactive >= 60) {
           alertType = "no_vendido_2m"
-          title = `Propiedad no vendida - ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}`
-          description = `"${prop.title}" no ha sido vendida en ${prop.days_inactive} días.`
+          title = `Propiedad no vendida`
+          description = `"${prop.title}" no ha sido vendida en ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}.`
         } else if (prop.days_inactive >= 30) {
           alertType = "no_alquilado_1m"
-          title = `Propiedad no alquilada - ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}`
-          description = `"${prop.title}" no ha sido alquilada en ${prop.days_inactive} días.`
+          title = `Propiedad no alquilada`
+          description = `"${prop.title}" no ha sido alquilada en ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"}.`
         }
       }
 
@@ -133,6 +137,7 @@ export async function POST(req: Request) {
       )
 
       let alertId: number
+      let isNewAlert = false
 
       if ((existingAlert as any[]).length > 0) {
         alertId = (existingAlert as any[])[0].id
@@ -148,9 +153,15 @@ export async function POST(req: Request) {
         console.log("[v0] Updated existing alert:", alertId)
 
         if (alreadyNotified) {
-          console.log("[v0] Alert already notified, skipping WhatsApp")
-          results.push({ alertId, action: "updated", notified: false, reason: "already_notified" })
-          continue
+          const lastNotified = new Date(alreadyNotified).getTime()
+          const now = Date.now()
+          const hoursSinceNotified = (now - lastNotified) / (1000 * 60 * 60)
+
+          if (hoursSinceNotified < 24) {
+            console.log("[v0] Alert already notified within 24h, skipping email")
+            results.push({ alertId, action: "updated", notified: false, reason: "already_notified_24h" })
+            continue
+          }
         }
       } else {
         const insertResult = await query(
@@ -160,87 +171,52 @@ export async function POST(req: Request) {
         )
 
         alertId = (insertResult as any).insertId
+        isNewAlert = true
         console.log("[v0] Created new alert:", alertId)
       }
 
       const asesorRole = prop.asesor_role || "asesor"
       const usersToNotify = await getUsersToNotifyByRole(prop.asesor_id, asesorRole)
 
-      console.log(`[v0] Alert from ${asesorRole} - Users to notify:`, (usersToNotify as any[]).length)
-      console.log(
-        `[v0] Notification hierarchy: ${asesorRole} -> ${
-          asesorRole === "asesor"
-            ? "asesor + admin + gerencia"
-            : asesorRole === "admin"
-              ? "admin + gerencia"
-              : "gerencia only"
-        }`,
-      )
+      console.log(`[v0] Alert from ${asesorRole} - Users to notify:`, usersToNotify.length)
 
-      // 5. Send WhatsApp notifications
-      const notificationResults = []
+      const emailResults = []
+      const propertyUrl = `${baseUrl}/propiedades/${prop.property_id}`
 
-      for (const user of usersToNotify as any[]) {
-        const phoneNumber = user.whatsapp || user.phone
-
-        if (!phoneNumber) {
-          console.log(`[v0] User ${user.name} (${user.role}) has no phone number, skipping`)
+      for (const user of usersToNotify) {
+        if (!user.email) {
+          console.log(`[v0] User ${user.name} (${user.role}) has no email, skipping`)
           continue
         }
 
-        const propertyUrl = `${baseUrl}/propiedades/${prop.property_id}`
+        const alertData = {
+          propertyTitle: prop.title,
+          propertyUrl,
+          alertType: alertType === "no_alquilado_1m" ? "no_alquilado" : "no_vendido",
+          daysInactive: prop.days_inactive,
+          monthsInactive,
+          description,
+          ownerName: prop.asesor_name,
+          ownerRole: asesorRole,
+          price: prop.price,
+          location: prop.location,
+          operationType: prop.operation_type,
+        }
 
-        const alertMessage =
-          alertType === "no_alquilado_1m"
-            ? `Este inmueble tiene ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"} sin alquilarse`
-            : `Este inmueble tiene ${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"} sin venderse`
+        console.log(`[v0] Sending email to ${user.name} (${user.role}) at ${user.email}`)
 
-        const message = `*ALERTA DE INMUEBLE - Your Business House*
+        const emailResult = await sendAlertEmail(user.email, user.name, alertData)
 
-*${prop.title}*
-
-${alertMessage}
-
-Ver inmueble: ${propertyUrl}
-
-Tipo: ${prop.operation_type === "alquiler" ? "Alquiler" : prop.operation_type === "compra" ? "Venta" : "Ambos"}
-Dias inactivo: ${prop.days_inactive} dias (${monthsInactive} ${monthsInactive === 1 ? "mes" : "meses"})
-Responsable: ${prop.asesor_name} (${asesorRole})
-
-${description}
-
-_Alerta generada automaticamente_`
-
-        const whatsappResult = await sendWhatsAppMessage(phoneNumber, message)
-
-        await query(
-          `INSERT INTO notification_log (alert_id, recipient_id, recipient_role, phone_number, message, status, error_message, sent_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            alertId,
-            user.id,
-            user.role,
-            phoneNumber,
-            message,
-            whatsappResult.success ? "sent" : "failed",
-            whatsappResult.error || null,
-            whatsappResult.success ? new Date() : null,
-          ],
-        )
-
-        notificationResults.push({
+        emailResults.push({
           userId: user.id,
           userName: user.name,
           role: user.role,
-          phone: phoneNumber,
-          success: whatsappResult.success,
-          error: whatsappResult.error,
+          email: user.email,
+          success: emailResult.success,
+          error: emailResult.error,
         })
 
-        console.log(
-          `[v0] WhatsApp to ${user.name} (${user.role}):`,
-          whatsappResult.success ? "sent" : `failed - ${whatsappResult.error}`,
-        )
+        console.log(`[v0] Email to ${user.name}:`, emailResult.success ? "sent" : `failed - ${emailResult.error}`)
       }
 
       await query(`UPDATE property_alerts SET notified_at = NOW() WHERE id = ?`, [alertId])
@@ -249,19 +225,19 @@ _Alerta generada automaticamente_`
         alertId,
         propertyId: prop.property_id,
         propertyTitle: prop.title,
-        asesorRole: asesorRole,
-        action: (existingAlert as any[]).length > 0 ? "updated" : "created",
+        asesorRole,
+        action: isNewAlert ? "created" : "updated",
         notified: true,
-        notifications: notificationResults,
+        emailNotifications: emailResults,
       })
     }
 
-    console.log("[v0] Alert generation and notification complete")
+    console.log("[v0] Alert generation and email notification complete")
     console.log("[v0] Total alerts processed:", results.length)
 
     return NextResponse.json({
       success: true,
-      message: "Alerts generated and notifications sent",
+      message: "Alerts generated and email notifications sent",
       alertsProcessed: results.length,
       results,
     })
