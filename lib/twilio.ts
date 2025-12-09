@@ -10,23 +10,36 @@ interface SendWhatsAppResult {
 }
 
 export async function sendWhatsAppMessage(to: string, message: string): Promise<SendWhatsAppResult> {
-  console.log("[v0] Attempting to send WhatsApp message...")
+  console.log("[v0] ====== SENDING WHATSAPP MESSAGE ======")
+  console.log("[v0] To:", to)
+  console.log("[v0] Message length:", message.length)
   console.log("[v0] TWILIO_ACCOUNT_SID exists:", !!TWILIO_ACCOUNT_SID)
   console.log("[v0] TWILIO_AUTH_TOKEN exists:", !!TWILIO_AUTH_TOKEN)
   console.log("[v0] TWILIO_WHATSAPP_FROM:", TWILIO_WHATSAPP_FROM)
-  console.log("[v0] Recipient:", to)
 
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-    console.error("[v0] Twilio credentials not configured")
-    return { success: false, error: "Twilio credentials not configured" }
+    console.error("[v0] ERROR: Twilio credentials not configured!")
+    console.error("[v0] Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables")
+    return {
+      success: false,
+      error:
+        "Twilio credentials not configured. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to environment variables.",
+    }
   }
 
-  // Formatear número para WhatsApp
-  const formattedTo = to.startsWith("whatsapp:") ? to : `whatsapp:${to.startsWith("+") ? to : "+" + to}`
+  let formattedTo = to.replace(/\s+/g, "").replace(/-/g, "")
+  if (!formattedTo.startsWith("+")) {
+    formattedTo = "+" + formattedTo
+  }
+  if (!formattedTo.startsWith("whatsapp:")) {
+    formattedTo = `whatsapp:${formattedTo}`
+  }
+
   console.log("[v0] Formatted recipient:", formattedTo)
 
   try {
     console.log("[v0] Sending request to Twilio API...")
+
     const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
       method: "POST",
       headers: {
@@ -42,19 +55,27 @@ export async function sendWhatsAppMessage(to: string, message: string): Promise<
 
     const data = await response.json()
     console.log("[v0] Twilio response status:", response.status)
-    console.log("[v0] Twilio response data:", data)
+    console.log("[v0] Twilio response:", JSON.stringify(data, null, 2))
 
     if (response.ok) {
-      console.log("[v0] WhatsApp message sent successfully! SID:", data.sid)
+      console.log("[v0] SUCCESS! WhatsApp message sent! SID:", data.sid)
       return { success: true, messageSid: data.sid }
     } else {
-      console.error("[v0] Twilio error:", data)
-      return { success: false, error: data.message || "Failed to send message" }
+      console.error("[v0] TWILIO ERROR:", data.message || data.error_message)
+      return { success: false, error: data.message || data.error_message || "Failed to send message" }
     }
   } catch (error) {
-    console.error("[v0] WhatsApp send error:", error)
+    console.error("[v0] EXCEPTION while sending WhatsApp:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
 
 export const sendWhatsAppAlert = sendWhatsAppMessage
+
+export function getTwilioStatus(): { configured: boolean; accountSid?: string; fromNumber: string } {
+  return {
+    configured: !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN),
+    accountSid: TWILIO_ACCOUNT_SID ? TWILIO_ACCOUNT_SID.substring(0, 10) + "..." : undefined,
+    fromNumber: TWILIO_WHATSAPP_FROM,
+  }
+}

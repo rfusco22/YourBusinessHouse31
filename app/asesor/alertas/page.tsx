@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Bell } from "lucide-react"
+import { AlertCircle, Bell, Mail, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { PremiumSidebar } from "@/components/premium-sidebar"
 import { Home, BookOpen, LayoutDashboard } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -23,14 +23,6 @@ interface Alert {
   operationType?: string
 }
 
-interface NotificationResult {
-  propertyId: number
-  type: string
-  success?: boolean
-  sent?: boolean
-  reason?: string
-}
-
 const formatDate = (dateString: string) => {
   const date = new Date(dateString)
   const day = date.getDate().toString().padStart(2, "0")
@@ -46,11 +38,8 @@ export default function AsesorAlertas() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [loadingAlerts, setLoadingAlerts] = useState(false)
-  const [notificationStatus, setNotificationStatus] = useState<{
-    sent: number
-    failed: number
-    alreadyNotified: number
-  } | null>(null)
+  const [sendingEmail, setSendingEmail] = useState<number | null>(null)
+  const [emailResults, setEmailResults] = useState<Record<number, { success: boolean; message: string }>>({})
 
   const navItems = [
     {
@@ -88,7 +77,7 @@ export default function AsesorAlertas() {
 
     const intervalId = setInterval(() => {
       loadAlerts(parsedUser.id, parsedUser.role)
-    }, 60000) // 60 segundos
+    }, 60000)
 
     return () => clearInterval(intervalId)
   }, [router])
@@ -99,12 +88,8 @@ export default function AsesorAlertas() {
       const response = await fetch(`/api/alerts/my-alerts?userId=${userId}&userRole=${userRole}`)
       const data = await response.json()
 
-      console.log("[v0] Alerts response:", data)
-
       if (data.success) {
         setAlerts(data.alerts.filter((a: Alert) => a.status === "activa"))
-      } else {
-        console.error("[v0] Error loading alerts:", data.error)
       }
     } catch (error) {
       console.error("[v0] Error fetching alerts:", error)
@@ -113,10 +98,56 @@ export default function AsesorAlertas() {
     }
   }
 
+  const sendEmailNotification = async (alert: Alert) => {
+    if (!user || !alert.propertyId) return
+
+    setSendingEmail(alert.id)
+    setEmailResults((prev) => ({ ...prev, [alert.id]: { success: false, message: "Enviando..." } }))
+
+    try {
+      const response = await fetch("/api/alerts/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alertId: alert.id,
+          propertyId: alert.propertyId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setEmailResults((prev) => ({
+          ...prev,
+          [alert.id]: {
+            success: true,
+            message: `Enviado a ${data.emailsSent} usuario(s)`,
+          },
+        }))
+      } else {
+        setEmailResults((prev) => ({
+          ...prev,
+          [alert.id]: {
+            success: false,
+            message: data.error || "Error al enviar",
+          },
+        }))
+      }
+    } catch (error) {
+      setEmailResults((prev) => ({
+        ...prev,
+        [alert.id]: {
+          success: false,
+          message: "Error de conexión",
+        },
+      }))
+    } finally {
+      setSendingEmail(null)
+    }
+  }
+
   const resolveAlert = async (alertId: number, propertyId: number, actionType: "rented" | "sold" | "edited") => {
     try {
-      console.log("[v0] Resolving alert:", alertId, "Action:", actionType)
-
       const response = await fetch("/api/alerts/resolve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,9 +162,6 @@ export default function AsesorAlertas() {
 
       if (data.success) {
         setAlerts(alerts.filter((a) => a.id !== alertId))
-        console.log("[v0] Alert resolved successfully")
-      } else {
-        console.error("[v0] Error resolving alert:", data.error)
       }
     } catch (error) {
       console.error("[v0] Error resolving alert:", error)
@@ -179,14 +207,14 @@ export default function AsesorAlertas() {
           <p className="text-xs text-gray-400 mt-1">Las alertas se actualizan automáticamente cada minuto</p>
         </div>
 
-        <div className="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+        <div className="mb-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Bell className="text-green-500 shrink-0 mt-0.5" size={20} />
+            <Mail className="text-blue-500 shrink-0 mt-0.5" size={20} />
             <div>
-              <p className="text-white font-medium">Notificaciones Automáticas por WhatsApp</p>
+              <p className="text-white font-medium">Notificaciones Automáticas por Correo</p>
               <p className="text-gray-400 text-sm mt-1">
-                Recibirás automáticamente un mensaje de WhatsApp cuando se detecte una propiedad que cumple los
-                criterios de alerta (alquileres sin movimiento por 30+ días, ventas sin movimiento por 60+ días).
+                Recibirás automáticamente un correo electrónico cuando se detecte una propiedad que cumple los criterios
+                de alerta (alquileres sin movimiento por 30+ días, ventas sin movimiento por 60+ días).
               </p>
             </div>
           </div>
@@ -211,13 +239,39 @@ export default function AsesorAlertas() {
                         {alert.daysInactive && <p>Inactivo por: {alert.daysInactive} días</p>}
                         <p>Fecha: {formatDate(alert.createdAt)}</p>
                       </div>
+
+                      {emailResults[alert.id] && (
+                        <div
+                          className={cn(
+                            "mt-2 text-xs flex items-center gap-1",
+                            emailResults[alert.id].success ? "text-green-400" : "text-red-400",
+                          )}
+                        >
+                          {emailResults[alert.id].success ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                          {emailResults[alert.id].message}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-2 ml-4 flex-col">
+                      <Button
+                        onClick={() => sendEmailNotification(alert)}
+                        disabled={sendingEmail === alert.id}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs whitespace-nowrap flex items-center gap-1"
+                        title="Enviar notificación por correo"
+                      >
+                        {sendingEmail === alert.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <Mail size={14} />
+                        )}
+                        Enviar Correo
+                      </Button>
+
                       {alert.type === "no_alquilado_1m" && (
                         <>
                           <Button
                             onClick={() => resolveAlert(alert.id, alert.propertyId!, "rented")}
-                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs whitespace-nowrap"
+                            className="bg-green-600 hover:bg-green-700 text-white text-xs whitespace-nowrap"
                             title="Marcar como alquilado"
                           >
                             Alquilado
